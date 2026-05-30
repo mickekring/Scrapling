@@ -115,12 +115,19 @@ docker compose up --build                  # -> http://localhost:8000
 
 ## Deploy on Coolify
 
-1. **New Resource → Docker Compose**, source = this Git repo, branch `feat/scrape-api` (or `main` once merged).
+1. **New Resource → Docker Compose**, source = this Git repo, branch **`feat/scrape-api`**.
 2. **Base Directory = `/api`** (so the compose, Dockerfile and build context resolve here).
 3. **Environment Variables** (Coolify UI — `.env` is gitignored, so set them here):
    `API_KEY` (generate one), `APIFY_PROXY_PASSWORD`, and optionally `DEFAULT_PROXY=auto`.
-4. **Domain**: assign one — Coolify's proxy routes it to the container's `expose`d port `8000` with automatic HTTPS. (Leave the host `ports:` block commented; publishing it bypasses the proxy.)
+4. **Domain**: set it **with the container port** — `https://<your-domain>:8000`. The `:8000`
+   tells Coolify's proxy which container port to route to; **without it you get a
+   "no available server" error** (the app listens on 8000, the proxy otherwise defaults to 80).
+   Coolify issues the HTTPS cert once routing works (~1 min). Leave the host `ports:` block commented.
 5. Deploy. Health check path is `/health`; `shm_size: 1gb` is already in the compose.
+
+**Troubleshooting "no available server" / SSL not secure:** the app is fine if
+`curl localhost:8000/health` works from the service's terminal in Coolify — the problem is
+proxy routing. Ensure the domain includes **`:8000`** (step 4) and that DNS points to the Coolify host.
 
 > The image bundles Chromium (~1–1.5 GB); the first build takes a few minutes.
 
