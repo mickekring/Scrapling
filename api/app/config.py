@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     solve_cloudflare: bool = True
     min_html_chars: int = 200            # a 2xx page with less body than this is treated as empty / needs-JS
     max_concurrent_browsers: int = 2     # cap simultaneous browser launches (memory guard)
-    request_max_seconds: int = 120       # overall per-request escalation budget
+    request_max_seconds: int = 240       # overall per-request escalation budget (covers slow stealth sites)
 
 
 @lru_cache
