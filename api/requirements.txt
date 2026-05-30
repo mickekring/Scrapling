@@ -1,0 +1,8 @@
+# Pin Scrapling so upstream pulls into the fork never silently change the API's behaviour.
+# Bump this deliberately (and re-test) to adopt a newer Scrapling.
+scrapling[fetchers]==0.4.8
+markdownify>=1.2.0          # HTML -> Markdown (imported lazily by scrapling.core.shell.Convertor)
+
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.34,<1.0
+pydantic-settings>=2.5,<3.0

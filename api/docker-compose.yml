@@ -1,0 +1,17 @@
+# Works for both local `docker compose up` and Coolify (Docker Compose resource).
+services:
+  scrapling-api:
+    build: .
+    image: scrapling-api:latest
+    ports:
+      - "8000:8000"
+    env_file: .env
+    restart: unless-stopped
+    # Chromium needs a larger /dev/shm than Docker's 64MB default, or it crashes.
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
