@@ -115,19 +115,28 @@ docker compose up --build                  # -> http://localhost:8000
 
 ## Deploy on Coolify
 
-1. **New Resource → Docker Compose**, source = this Git repo, branch **`feat/scrape-api`**.
-2. **Base Directory = `/api`** (so the compose, Dockerfile and build context resolve here).
-3. **Environment Variables** (Coolify UI — `.env` is gitignored, so set them here):
-   `API_KEY` (generate one), `APIFY_PROXY_PASSWORD`, and optionally `DEFAULT_PROXY=auto`.
-4. **Domain**: set it **with the container port** — `https://<your-domain>:8000`. The `:8000`
-   tells Coolify's proxy which container port to route to; **without it you get a
-   "no available server" error** (the app listens on 8000, the proxy otherwise defaults to 80).
-   Coolify issues the HTTPS cert once routing works (~1 min). Leave the host `ports:` block commented.
-5. Deploy. Health check path is `/health`; `shm_size: 1gb` is already in the compose.
+Use the **Dockerfile build pack** (not Docker Compose). Coolify's compose deploys have a known
+bug where the Traefik `loadbalancer.server.port` label isn't generated for a custom port, which
+yields a **"no available server"** error; the Dockerfile build pack sets the port explicitly and
+avoids it.
 
-**Troubleshooting "no available server" / SSL not secure:** the app is fine if
-`curl localhost:8000/health` works from the service's terminal in Coolify — the problem is
-proxy routing. Ensure the domain includes **`:8000`** (step 4) and that DNS points to the Coolify host.
+1. **New Resource → Application → (Public/Private) Git Repository**, branch **`feat/scrape-api`**.
+2. **Build Pack: `Dockerfile`.**
+3. **Base Directory: `/api`** → Coolify builds `/api/Dockerfile` with context `/api`.
+4. **Ports Exposes: `8000`** — the key field; this is the backend port Coolify routes to.
+5. **Domain: `https://<your-domain>`** — no `:8000` (the Ports Exposes field already sets the port).
+6. **Custom Docker Options: `--shm-size=1g`** — Chromium needs more than Docker's 64MB default `/dev/shm`.
+7. **Environment Variables**: `API_KEY` (generate one), `APIFY_PROXY_PASSWORD`, optional `DEFAULT_PROXY=auto`.
+8. *(optional)* Health check: path `/health`, port `8000`.
+9. Deploy → cert provisions in ~1 min → `https://<your-domain>/health` → `{"status":"ok"}`.
+
+**Troubleshooting "no available server":** the app itself is fine if `curl localhost:8000/health`
+works from the service's terminal in Coolify — it's purely proxy/port routing. With the Dockerfile
+build pack make sure **Ports Exposes = 8000**. (The Compose build pack instead needs the port on the
+domain, `https://host:8000`, but can still hit the label bug above.)
+
+> Local testing still uses the compose file: uncomment its `ports:` block and run
+> `docker compose up --build` (it already sets `shm_size: 1gb`).
 
 > The image bundles Chromium (~1–1.5 GB); the first build takes a few minutes.
 
