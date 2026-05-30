@@ -87,7 +87,10 @@ def _visible_text(page) -> str:
     """Real, human-visible text — excludes scripts/styles/interstitial markup."""
     if page is None:
         return ""
-    return page.get_all_text(strip=True, ignore_tags=("script", "style", "noscript", "svg", "iframe", "template"))
+    try:
+        return page.get_all_text(strip=True, ignore_tags=("script", "style", "noscript", "svg", "iframe", "template"))
+    except Exception:
+        return ""  # empty/None body -> no text
 
 
 def _classify(page, html: str, status: Optional[int], err: Optional[str], s: Settings) -> Outcome:
@@ -122,11 +125,24 @@ def _classify(page, html: str, status: Optional[int], err: Optional[str], s: Set
 
 
 def _extract(page, fmt: str, css_selector: Optional[str], main_content_only: bool) -> str:
-    return "".join(
-        Convertor._extract_content(
-            page, extraction_type=fmt, css_selector=css_selector, main_content_only=main_content_only
+    if page is None:
+        return ""
+    try:
+        return "".join(
+            Convertor._extract_content(
+                page, extraction_type=fmt, css_selector=css_selector, main_content_only=main_content_only
+            )
         )
-    )
+    except Exception:
+        return ""  # empty/None body (e.g. a 200 with no content) -> nothing to extract
+
+
+def _safe_html(page) -> str:
+    """page.html_content raises if the response body was empty (lxml root is None)."""
+    try:
+        return str(page.html_content)
+    except Exception:
+        return ""
 
 
 async def _run_one(url: str, engine: str, proxy_url: Optional[str], s: Settings):
@@ -139,10 +155,14 @@ async def _run_one(url: str, engine: str, proxy_url: Optional[str], s: Settings)
         else:
             async with _browser_limiter:  # gate heavy browser launches
                 page = await run_in_threadpool(fn, url, proxy_url, s)
-        html = str(page.html_content)
-        return page, getattr(page, "status", None), html, None, int((time.monotonic() - t0) * 1000)
-    except Exception as e:  # noqa: BLE001 — surface as a recorded attempt, keep escalating
+    except Exception as e:  # noqa: BLE001 — the fetch itself failed; record and keep escalating
         return None, None, "", f"{type(e).__name__}: {e}", int((time.monotonic() - t0) * 1000)
+    # The fetch returned a response, but the body may be empty (a 200 with no
+    # content -- common for geo-blocks / anti-bot). That makes html_content and
+    # get_all_text raise; treat it as empty content (-> EMPTY -> escalate) rather
+    # than a hard error, and keep the real status code.
+    status = getattr(page, "status", None)
+    return page, status, _safe_html(page), None, int((time.monotonic() - t0) * 1000)
 
 
 async def scrape(
