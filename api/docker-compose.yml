@@ -1,14 +1,33 @@
 # Works for both local `docker compose up` and Coolify (Docker Compose resource).
+#
+# Scrapling itself is NOT installed here — this file only BUILDS and RUNS the image.
+# The install happens in ./Dockerfile (pip install -r requirements.txt, which pins
+# scrapling[fetchers]==0.4.8, then playwright/patchright install chromium).
 services:
   scrapling-api:
     build: .
-    image: scrapling-api:latest
-    ports:
-      - "8000:8000"
-    env_file: .env
     restart: unless-stopped
-    # Chromium needs a larger /dev/shm than Docker's 64MB default, or it crashes.
+
+    # Coolify routes your domain to this container port through its own proxy
+    # (with automatic HTTPS). Do NOT publish host ports on Coolify.
+    expose:
+      - "8000"
+    # For LOCAL `docker compose up` (no Coolify proxy in front), comment out the
+    # `expose` block above and uncomment this to reach it on http://localhost:8000 :
+    # ports:
+    #   - "8000:8000"
+
+    environment:
+      # Set these in the Coolify UI → Environment Variables. Locally, put them in a
+      # `.env` file beside this compose (Docker reads it automatically for ${...}).
+      # Everything else uses the defaults in app/config.py.
+      API_KEY: ${API_KEY:-}
+      APIFY_PROXY_PASSWORD: ${APIFY_PROXY_PASSWORD:-}
+      DEFAULT_PROXY: ${DEFAULT_PROXY:-off}   # set to "auto" to auto-use the proxy on geo/IP blocks
+
+    # Chromium needs more than Docker's default 64MB /dev/shm or it crashes.
     shm_size: "1gb"
+
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s

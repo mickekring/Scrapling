@@ -102,18 +102,27 @@ curl -s -H "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
   http://localhost:8000/scrape
 ```
 
-## Docker / Coolify
+## Docker (local)
+
+`scrapling` is installed by the **Dockerfile** (`pip install -r requirements.txt`),
+not by compose — compose only builds & runs that image.
 
 ```bash
-docker compose up --build      # local
+cp .env.example .env                       # set API_KEY etc.
+# uncomment the `ports:` block in docker-compose.yml (Coolify uses `expose` instead)
+docker compose up --build                  # -> http://localhost:8000
 ```
 
-On **Coolify**: New Resource → *Docker Compose* (or *Dockerfile*), point it at this
-`/api` directory (Base Directory `/api`). Set the env vars from `.env.example`
-(`API_KEY`, `APIFY_PROXY_PASSWORD`, …) in the Coolify UI. Expose port `8000`;
-health check path `/health`. Keep `shm_size: 1gb` (Chromium needs it).
+## Deploy on Coolify
 
-> The image bundles Chromium, so it is ~1–1.5 GB and first build takes a few minutes.
+1. **New Resource → Docker Compose**, source = this Git repo, branch `feat/scrape-api` (or `main` once merged).
+2. **Base Directory = `/api`** (so the compose, Dockerfile and build context resolve here).
+3. **Environment Variables** (Coolify UI — `.env` is gitignored, so set them here):
+   `API_KEY` (generate one), `APIFY_PROXY_PASSWORD`, and optionally `DEFAULT_PROXY=auto`.
+4. **Domain**: assign one — Coolify's proxy routes it to the container's `expose`d port `8000` with automatic HTTPS. (Leave the host `ports:` block commented; publishing it bypasses the proxy.)
+5. Deploy. Health check path is `/health`; `shm_size: 1gb` is already in the compose.
+
+> The image bundles Chromium (~1–1.5 GB); the first build takes a few minutes.
 
 ## Calling from n8n
 
