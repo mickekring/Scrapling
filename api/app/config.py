@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     http_impersonate: str = "chrome"     # curl_cffi TLS fingerprint
     browser_network_idle: bool = True
     solve_cloudflare: bool = True
-    min_html_chars: int = 200            # a 2xx page with less body than this is treated as empty / needs-JS
+    min_content_chars: int = 200         # a 2xx page with less VISIBLE TEXT than this is "empty" (JS shell / 200-status anti-bot interstitial) -> escalate
     max_concurrent_browsers: int = 2     # cap simultaneous browser launches (memory guard)
     request_max_seconds: int = 240       # overall per-request escalation budget (covers slow stealth sites)
 

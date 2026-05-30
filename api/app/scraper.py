@@ -83,18 +83,26 @@ def _looks(markers: Tuple[str, ...], html: str) -> bool:
     return any(m in low for m in markers)
 
 
+def _visible_text(page) -> str:
+    """Real, human-visible text — excludes scripts/styles/interstitial markup."""
+    if page is None:
+        return ""
+    return page.get_all_text(strip=True, ignore_tags=("script", "style", "noscript", "svg", "iframe", "template"))
+
+
 def _classify(page, html: str, status: Optional[int], err: Optional[str], s: Settings) -> Outcome:
     if err is not None or page is None:
         return Outcome.ERROR
 
-    body_ok = len(html.strip()) >= s.min_html_chars
+    # Gate success on real VISIBLE TEXT, not raw markup. A 200 that is only a JS
+    # shell, or a 200-status anti-bot interstitial, carries plenty of markup but
+    # ~no text -- it must NOT count as success; it should escalate to a browser.
+    content_ok = len(_visible_text(page).strip()) >= s.min_content_chars
 
-    # Decide SUCCESS first. A 2xx response with a substantial body is the real
-    # page -- and a *solved* anti-bot challenge lands here too. We must not let
-    # incidental challenge words in legitimate content (e.g. a page that is
-    # literally about Cloudflare/Turnstile) be mistaken for an unsolved wall.
-    # Unsolved interstitials are short, so the body-size gate filters them out.
-    if status is not None and 200 <= status < 300 and body_ok:
+    # Decide SUCCESS first. A 2xx with real text is the page -- and a *solved*
+    # anti-bot challenge lands here too, so incidental challenge words in
+    # legitimate content can't be mistaken for an unsolved wall.
+    if status is not None and 200 <= status < 300 and content_ok:
         return Outcome.OK
 
     # Everything below is a block, an interstitial, or a thin/empty body.
