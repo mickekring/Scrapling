@@ -65,6 +65,7 @@ def _fetch_http(url: str, proxy_url: Optional[str], s: Settings):
 def _fetch_dynamic(url: str, proxy_url: Optional[str], s: Settings):
     return DynamicFetcher.fetch(
         url, headless=True, network_idle=s.browser_network_idle, proxy=proxy_url,
+        retries=s.browser_retries,
     )
 
 
@@ -72,6 +73,7 @@ def _fetch_stealth(url: str, proxy_url: Optional[str], s: Settings):
     return StealthyFetcher.fetch(
         url, headless=True, network_idle=s.browser_network_idle,
         solve_cloudflare=s.solve_cloudflare, google_search=False, proxy=proxy_url,
+        retries=s.browser_retries,
     )
 
 

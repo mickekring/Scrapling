@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     http_impersonate: str = "chrome"     # curl_cffi TLS fingerprint
     browser_network_idle: bool = True
     solve_cloudflare: bool = True
+    browser_retries: int = 2             # per browser-fetch internal retries (Scrapling default 3). Each retry is a full ~60-130s cycle on hard sites, so 3 can blow past client timeouts; 2 keeps a single call bounded. Let n8n retry the rest.
     min_content_chars: int = 200         # a 2xx page with less VISIBLE TEXT than this is "empty" (JS shell / 200-status anti-bot interstitial) -> escalate
     max_concurrent_browsers: int = 2     # cap simultaneous browser launches (memory guard)
     request_max_seconds: int = 240       # overall per-request escalation budget (covers slow stealth sites)
