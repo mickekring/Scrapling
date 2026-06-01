@@ -84,11 +84,16 @@ def _looks(markers: Tuple[str, ...], html: str) -> bool:
 
 
 def _visible_text(page) -> str:
-    """Real, human-visible text — excludes scripts/styles/interstitial markup."""
+    """Real, human-visible text — excludes scripts/styles/interstitial markup.
+
+    `textarea` is excluded too: some 200-status WAF challenge pages (e.g. Alibaba
+    Cloud WAF) hide a big base64 payload in a <textarea>, which would otherwise be
+    counted as "content" and fool the success gate into not escalating to a browser.
+    """
     if page is None:
         return ""
     try:
-        return page.get_all_text(strip=True, ignore_tags=("script", "style", "noscript", "svg", "iframe", "template"))
+        return page.get_all_text(strip=True, ignore_tags=("script", "style", "noscript", "svg", "iframe", "template", "textarea"))
     except Exception:
         return ""  # empty/None body -> no text
 
