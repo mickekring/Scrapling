@@ -139,16 +139,6 @@ MySpider().start()
   </tr>
   <tr>
     <td width="200">
-      <a href="https://www.nsocks.com/?keyword=2p67aivg" target="_blank" title="Scalable Web Data Access for AI Applications">
-        <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/nsocks.png">
-      </a>
-    </td>
-    <td>
-    <a href="https://www.nsocks.com/?keyword=2p67aivg" target="_blank">Nsocks</a> は開発者やスクレイパー向けの高速なレジデンシャルおよび ISP プロキシを提供。グローバル IP カバレッジ、高い匿名性、スマートなローテーション、自動化とデータ抽出のための信頼性の高いパフォーマンス。<a href="https://www.xcrawl.com/?keyword=2p67aivg" target="_blank">Xcrawl</a> で大規模ウェブクローリングを簡素化。
-    </td>
-  </tr>
-  <tr>
-    <td width="200">
       <a href="https://petrosky.io/d4vinci" target="_blank" title="PetroSky delivers cutting-edge VPS hosting.">
         <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/petrosky.png">
       </a>
@@ -170,16 +160,6 @@ MySpider().start()
   </tr>
   <tr>
     <td width="200">
-      <a href="http://mangoproxy.com/?utm_source=D4Vinci&utm_medium=GitHub&utm_campaign=D4Vinci" target="_blank" title="Proxies You Can Rely On: Residential, Server, and Mobile">
-        <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/MangoProxy.png">
-      </a>
-    </td>
-    <td>
-    <a href="http://mangoproxy.com/?utm_source=D4Vinci&utm_medium=GitHub&utm_campaign=D4Vinci" target="_blank">安定したプロキシ</a>。スクレイピング、自動化、マルチアカウント管理に対応。クリーンな IP、高速レスポンス、高負荷時でも信頼性の高いパフォーマンス。スケーラブルなワークフロー向けに設計。
-    </td>
-  </tr>
-  <tr>
-    <td width="200">
       <a href="https://www.swiftproxy.net/?ref=D4Vinci" target="_blank" title="Scalable Solutions for Web Data Access">
         <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/SwiftProxy.png">
       </a>
@@ -195,7 +175,7 @@ MySpider().start()
       </a>
     </td>
     <td>
-    <a href="https://9proxy.com/pricing?tab=traffic&utm_source=Github&utm_campaign=D4vinci" target="_blank">9Proxy</a> はIPあたり $0.015 またはGBあたり $0.68 からの住宅用プロキシを提供します。90カ国以上で2,000万以上のIPを保有。固定セッションまたはローテーションセッションをデスクトップまたはモバイルアプリで管理できます。
+    <a href="https://9proxy.com/pricing?tab=traffic&utm_source=Github&utm_campaign=D4vinci" target="_blank">9Proxy</a> はIPあたり $0.018 またはGBあたり $0.68 からの住宅用プロキシを提供します。90カ国以上で2,000万以上のIPを保有。固定セッションまたはローテーションセッションをデスクトップまたはモバイルアプリで管理できます。
     </td>
   </tr>
   <tr>
@@ -487,7 +467,8 @@ Scrapling には Python 3.10 以上が必要です：
 pip install scrapling
 ```
 
-このインストールにはパーサーエンジンとその依存関係のみが含まれており、Fetcher やコマンドライン依存関係は含まれていません。
+> [!IMPORTANT]
+> このインストールにはパーサーエンジンとその依存関係のみが含まれており、Fetcher やコマンドライン依存関係は含まれていません。 そのため、このインストールのみでは、上記の例のように `scrapling.fetchers` や `scrapling.spiders` から何かをインポートすると `ModuleNotFoundError` が発生します。Fetcher や Spider を使用する場合は、以下のように、まず Fetcher の依存関係をインストールしてください。
 
 ### オプションの依存関係
 

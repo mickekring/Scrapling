@@ -141,16 +141,6 @@ MySpider().start()
   </tr>
   <tr>
     <td width="200">
-      <a href="https://www.nsocks.com/?keyword=2p67aivg" target="_blank" title="Scalable Web Data Access for AI Applications">
-        <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/nsocks.png">
-      </a>
-    </td>
-    <td>
-    <a href="https://www.nsocks.com/?keyword=2p67aivg" target="_blank">Nsocks</a> fornece proxies residenciais e ISP rápidos para desenvolvedores e scrapers. Cobertura global de IPs, alto anonimato, rotação inteligente e desempenho confiável para automação e extração de dados. Use o <a href="https://www.xcrawl.com/?keyword=2p67aivg" target="_blank">Xcrawl</a> para simplificar o crawling web em larga escala.
-    </td>
-  </tr>
-  <tr>
-    <td width="200">
       <a href="https://petrosky.io/d4vinci" target="_blank" title="PetroSky delivers cutting-edge VPS hosting.">
         <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/petrosky.png">
       </a>
@@ -172,16 +162,6 @@ MySpider().start()
   </tr>
   <tr>
     <td width="200">
-      <a href="http://mangoproxy.com/?utm_source=D4Vinci&utm_medium=GitHub&utm_campaign=D4Vinci" target="_blank" title="Proxies You Can Rely On: Residential, Server, and Mobile">
-        <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/MangoProxy.png">
-      </a>
-    </td>
-    <td>
-    <a href="http://mangoproxy.com/?utm_source=D4Vinci&utm_medium=GitHub&utm_campaign=D4Vinci" target="_blank">Proxies estáveis</a> para scraping, automação e multi-accounting. IPs limpos, resposta rápida e desempenho confiável sob carga. Feito para fluxos de trabalho escaláveis.
-    </td>
-  </tr>
-  <tr>
-    <td width="200">
       <a href="https://www.swiftproxy.net/?ref=D4Vinci" target="_blank" title="Scalable Solutions for Web Data Access">
         <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/SwiftProxy.png">
       </a>
@@ -197,7 +177,7 @@ MySpider().start()
       </a>
     </td>
     <td>
-    <a href="https://9proxy.com/pricing?tab=traffic&utm_source=Github&utm_campaign=D4vinci" target="_blank">9Proxy</a> oferece proxies residenciais a partir de apenas $0,015/IP ou $0,68/GB. Mais de 20M de IPs em mais de 90 países. Sessões fixas ou rotativas, gerenciadas pelo aplicativo desktop ou móvel.
+    <a href="https://9proxy.com/pricing?tab=traffic&utm_source=Github&utm_campaign=D4vinci" target="_blank">9Proxy</a> oferece proxies residenciais a partir de apenas $0,018/IP ou $0,68/GB. Mais de 20M de IPs em mais de 90 países. Sessões fixas ou rotativas, gerenciadas pelo aplicativo desktop ou móvel.
     </td>
   </tr>
   <tr>
@@ -489,7 +469,8 @@ O Scrapling requer Python 3.10 ou superior:
 pip install scrapling
 ```
 
-Esta instalação inclui apenas o motor de parsing e suas dependências, sem fetchers nem dependências de linha de comando.
+> [!IMPORTANT]
+> Esta instalação inclui apenas o motor de parsing e suas dependências, sem fetchers nem dependências de linha de comando. Portanto, importar qualquer coisa de `scrapling.fetchers` ou `scrapling.spiders`, como nos exemplos acima, lançará um `ModuleNotFoundError` apenas com esta instalação. Se você for usar algum dos fetchers ou spiders, instale primeiro as dependências dos fetchers como mostrado abaixo.
 
 ### Dependências Opcionais
 
