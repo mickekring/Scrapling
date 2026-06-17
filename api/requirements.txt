@@ -1,6 +1,6 @@
 # Pin Scrapling so upstream pulls into the fork never silently change the API's behaviour.
 # Bump this deliberately (and re-test) to adopt a newer Scrapling.
-scrapling[fetchers]==0.4.8
+scrapling[fetchers]==0.4.9
 markdownify>=1.2.0          # HTML -> Markdown (imported lazily by scrapling.core.shell.Convertor)
 
 fastapi>=0.115,<1.0
