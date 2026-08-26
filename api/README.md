@@ -148,7 +148,7 @@ Use the **HTTP Request** node:
 - Body type *JSON*: `{ "url": "{{ $json.url }}", "format": "markdown", "engine": "auto", "proxy": "auto" }`
 - Read the result from `{{ $json.content }}`.
 
-The stealth tier can take ~30–60 s, so raise the node's timeout accordingly
+The stealth tier can take ~30–90 s (a Cloudflare solve measured 75 s on the Coolify host), so raise the node's timeout accordingly
 (Settings → Timeout) to comfortably exceed `REQUEST_MAX_SECONDS`.
 
 ## Notes & limits
