@@ -16,9 +16,11 @@
         <img alt="Tests" src="https://github.com/D4Vinci/Scrapling/actions/workflows/tests.yml/badge.svg"></a>
     <a href="https://badge.fury.io/py/Scrapling" alt="PyPI version">
         <img alt="PyPI version" src="https://badge.fury.io/py/Scrapling.svg"></a>
+    <a href="https://hub.docker.com/r/pyd4vinci/scrapling" target="_blank">
+        <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/pyd4vinci/scrapling?labelColor=%20%23FDB062&logo=Docker&labelColor=%20%23528bff"></a>
     <a href="https://clickpy.clickhouse.com/dashboard/scrapling" rel="nofollow"><img src="https://img.shields.io/pypi/dm/scrapling" alt="PyPI package downloads"></a>
-    <a href="https://github.com/D4Vinci/Scrapling/tree/main/agent-skill" alt="AI Agent Skill directory">
-        <img alt="Static Badge" src="https://img.shields.io/badge/Skill-black?style=flat&label=Agent&link=https%3A%2F%2Fgithub.com%2FD4Vinci%2FScrapling%2Ftree%2Fmain%2Fagent-skill"></a>
+    <a href="https://scrapling.readthedocs.io/en/latest/ai/agent-skill.html" alt="AI Agent Skill">
+        <img alt="Static Badge" src="https://img.shields.io/badge/Skill-black?style=flat&label=Agent&link=https%3A%2F%2Fscrapling.readthedocs.io%2Fen%2Flatest%2Fai%2Fagent-skill.html"></a>
     <a href="https://clawhub.ai/D4Vinci/scrapling-official" alt="OpenClaw Skill">
         <img alt="OpenClaw Skill" src="https://img.shields.io/badge/Clawhub-darkred?style=flat&label=OpenClaw&link=https%3A%2F%2Fclawhub.ai%2FD4Vinci%2Fscrapling-official"></a>
     <br/>
@@ -49,7 +51,7 @@
 
 Scrapling은 단일 요청부터 대규모 크롤링까지 모든 것을 처리하는 적응형 Web Scraping 프레임워크입니다.
 
-파서는 웹사이트 변경 사항을 학습하고, 페이지가 업데이트되면 요소를 자동으로 재배치합니다. Fetcher는 Cloudflare Turnstile 같은 안티봇 시스템을 별도 설정 없이 우회합니다. Spider 프레임워크를 사용하면 일시정지/재개 및 자동 프록시 로테이션을 갖춘 동시 멀티 세션 크롤링으로 확장할 수 있습니다 - 모두 Python 몇 줄이면 됩니다. 하나의 라이브러리, 타협 없는 성능.
+파서는 웹사이트 변경 사항을 학습하고, 페이지가 업데이트되면 요소를 자동으로 재배치합니다. Fetcher는 Cloudflare Turnstile 같은 안티봇 시스템을 별도 설정 없이 우회합니다. Spider 프레임워크를 사용하면 일시정지/재개, 자동 프록시 로테이션, 그리고 각 웹사이트의 응답 속도에 맞춰 조절되고 차단이 시작되면 속도를 늦추는 크롤링 속도를 갖춘 동시 멀티 세션 크롤링으로 확장할 수 있습니다 - 모두 Python 몇 줄이면 됩니다. 하나의 라이브러리, 타협 없는 성능.
 
 실시간 통계와 스트리밍을 통한 초고속 크롤링. Web Scraper가 만들고, Web Scraper와 일반 사용자 모두를 위해 설계했습니다.
 
@@ -85,11 +87,30 @@ MySpider().start()
 <table>
   <tr>
     <td width="200">
-      <a href="https://coldproxy.com/" target="_blank" title="Residential, IPv6 & Datacenter Proxies for Web Scraping">
+      <a href="https://go.nodemaven.com/scraplingaugust" target="_blank" title="Proxies with the Highest IP Scores">
+        <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/NodeMaven.jpg" width="240" height="100">
+      </a>
+    </td>
+    <td>
+    <a href="https://go.nodemaven.com/scraplingaugust" target="_blank">NodeMaven</a> - 웹 스크래핑과 자동화를 위한 가장 효율적인 프록시 제공업체로, 시장에서 가장 높은 품질의 IP를 제공합니다. 코드 SCRAPLING35를 사용하면 35% 할인을 받을 수 있습니다.
+    </td>
+  </tr>
+  <tr>
+    <td width="200">
+      <a href="https://proxidize.com/?utm_source=github&utm_medium=sponsorship&utm_campaign=scrapling&utm_content=d4vinci" target="_blank" title="Clean Proxies with No Nonsense.">
+        <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/proxidize.png">
+      </a>
+    </td>
+    <td> <a href="https://proxidize.com/?utm_source=github&utm_medium=sponsorship&utm_campaign=scrapling&utm_content=d4vinci" target="_blank"><b>Proxidize</b></a>는 스크래핑, 브라우저 자동화, SEO 모니터링, AI 에이전트, 데이터 수집을 위한 모바일 및 주거용 프록시를 제공합니다. <i>코드 <b>scrapling20</b>으로 20% 할인</i>.
+    </td>
+  </tr>
+  <tr>
+    <td width="200">
+      <a href="https://coldproxy.com/?utm_source=scrapling&utm_medium=github&utm_campaign=coldproxy&utm_content=platinum_sponsor" target="_blank" title="Residential, IPv6 & Datacenter Proxies for Web Scraping">
         <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/coldproxy.png">
       </a>
     </td>
-    <td> <a href="https://coldproxy.com/" target="_blank"><b>ColdProxy</b></a>는 안정적인 웹 스크래핑, 공개 데이터 수집, 195개 이상의 국가에서의 지역 타겟팅 테스트를 위한 주거용 및 데이터센터 프록시를 제공합니다.
+    <td> <a href="https://coldproxy.com/?utm_source=scrapling&utm_medium=github&utm_campaign=coldproxy&utm_content=platinum_sponsor" target="_blank"><b>ColdProxy</b></a>는 안정적인 웹 스크래핑, 공개 데이터 수집, 195개 이상의 국가에서의 지역 타겟팅 테스트를 위한 주거용 및 데이터센터 프록시를 제공합니다.
     </td>
   </tr>
   <tr>
@@ -170,22 +191,12 @@ MySpider().start()
   </tr>
   <tr>
     <td width="200">
-      <a href="https://9proxy.com/pricing?tab=traffic&utm_source=Github&utm_campaign=D4vinci" target="_blank" title="Top-Tier Residential Proxy Solution for the Highest Success Rate">
-        <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/9proxy.jpg">
+      <a href="https://niuproxy.com/?utm_source=scrapling&utm_medium=scrapling&ref=scrapling" target="_blank" title="Affordable Residential in 190+ Countries">
+        <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/niuproxy.png">
       </a>
     </td>
     <td>
-    <a href="https://9proxy.com/pricing?tab=traffic&utm_source=Github&utm_campaign=D4vinci" target="_blank">9Proxy</a>는 IP당 $0.018 또는 GB당 $0.68의 저렴한 가격부터 시작하는 주거용 프록시를 제공합니다. 90개국 이상에서 2천만 개 이상의 IP를 보유하고 있으며, 고정 또는 회전 세션을 데스크톱이나 모바일 앱에서 관리할 수 있습니다.
-    </td>
-  </tr>
-  <tr>
-    <td width="200">
-      <a href="https://go.nodemaven.com/scrapling" target="_blank" title="Proxies with the Highest IP Scores">
-        <img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/NodeMaven.png">
-      </a>
-    </td>
-    <td>
-    <a href="https://go.nodemaven.com/scrapling" target="_blank">NodeMaven</a> - 시장에서 가장 높은 품질의 IP를 제공하는 신뢰할 수 있는 프록시 제공업체입니다. 프로모 코드 SCRAPLING35를 사용하면 프록시 35% 할인을 받을 수 있습니다.
+    <a href="https://niuproxy.com/?utm_source=scrapling&utm_medium=scrapling&ref=scrapling" target="_blank">NiuProxy</a>는 $0.35/GB부터 시작하는 로테이팅 레지덴셜 프록시를 제공합니다. Scrapling 전용 코드 PAY2를 사용하면 충전 시 10% 할인을 받을 수 있습니다.
     </td>
   </tr>
 </table>
@@ -195,9 +206,13 @@ MySpider().start()
 
 <!-- sponsors -->
 
+<a href="https://www.novada.com/?d4vinci-scrapling" target="_blank" title="The All-in-One Solution for Every Data Scraping Scenario"><img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/novada.jpg"></a>
+<a href="https://cloro.dev/?utm_source=referral&utm_medium=scrapling" target="_blank" title="The search API for the AI era"><img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/cloro.jpg"></a>
+
+<br/>
+
 <a href="https://serpapi.com/?utm_source=scrapling" target="_blank" title="Scrape Google and other search engines with SerpApi"><img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/SerpApi.png"></a>
 <a href="https://visit.decodo.com/Dy6W0b" target="_blank" title="Try the Most Efficient Residential Proxies for Free"><img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/decodo.png"></a>
-<a href="https://hasdata.com/?utm_source=github&utm_medium=banner&utm_campaign=D4Vinci" target="_blank" title="The web scraping service that actually beats anti-bot systems!"><img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/hasdata.png"></a>
 <a href="https://proxyempire.io/?ref=scrapling&utm_source=scrapling" target="_blank" title="Collect The Data Your Project Needs with the Best Residential Proxies"><img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/ProxyEmpire.png"></a>
 <a href="https://www.webshare.io/?referral_code=48r2m2cd5uz1" target="_blank" title="The Most Reliable Proxy with Unparalleled Performance"><img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/webshare.png"></a>
 <a href="https://proxiware.com/?ref=scrapling" target="_blank" title="Collect Any Data. At Any Scale."><img src="https://raw.githubusercontent.com/D4Vinci/Scrapling/main/images/proxiware.png"></a>
@@ -218,9 +233,12 @@ MySpider().start()
 - 💾 **일시정지 & 재개**: 체크포인트 기반의 크롤링 영속화. Ctrl+C로 정상 종료하고, 재시작하면 중단된 지점부터 이어갑니다.
 - 📡 **스트리밍 모드**: `async for item in spider.stream()`으로 스크레이핑된 아이템을 실시간 통계와 함께 스트리밍으로 수신 - UI, 파이프라인, 장시간 크롤링에 적합합니다.
 - 🛡️ **차단된 요청 감지**: 커스텀 로직을 통한 차단된 요청의 자동 감지 및 재시도를 지원합니다.
+- 🚦 **AutoThrottle**: 지연 시간을 추측할 필요가 없습니다. Spider가 사이트의 응답 속도에 맞춰 도메인별 지연 시간을 스스로 조정하고, 차단이나 속도 제한이 시작되면 지연을 두 배로 늘리거나 `Retry-After`가 요구하는 만큼 기다렸다가, 상황이 풀리면 다시 속도를 올립니다.
 - 🤖 **robots.txt 준수**: 선택적 `robots_txt_obey` 플래그로 `Disallow`, `Crawl-delay`, `Request-rate` 지시문을 도메인별 캐싱과 함께 준수합니다.
 - 🧪 **개발 모드**: 첫 실행 시 응답을 디스크에 캐싱하고 이후 실행에서는 캐시된 응답을 재생합니다 - 대상 서버에 다시 요청하지 않고 `parse()` 로직을 반복 개발할 수 있습니다.
-- 📦 **내장 내보내기**: 훅이나 자체 파이프라인, 또는 내장 JSON/JSONL로 결과를 내보냅니다. 각각 `result.items.to_json()` / `result.items.to_jsonl()`을 사용합니다.
+- 🧩 **바로 쓰는 Spider 템플릿**: 반복적인 코드는 건너뛰세요. 규칙 기반 링크 추적에는 `CrawlSpider`, sitemap/robots.txt 기반 크롤링에는 `SitemapSpider`, XML/RSS 및 CSV 피드 순회에는 `XMLFeedSpider`/`CSVFeedSpider`, 그리고 `ShopifySpider`로 어떤 Shopify 스토어든 JSON API를 통해 모든 상품을 가져올 수 있습니다(변형별로 항목 하나).
+- 🔗 **링크 추출**: allow/deny 패턴, 도메인 필터, CSS/XPath 범위 지정, 확장자 필터링, 정규화를 지원하는 독립형 `LinkExtractor`. 템플릿 안에서도, 단독으로도 사용할 수 있습니다.
+- 📦 **내장 내보내기**: 훅이나 자체 파이프라인, 또는 내장 JSON/JSONL/CSV/XML로 결과를 내보냅니다. `result.items.to_json()`, `to_jsonl()`, `to_csv()`, `to_xml()`을 사용합니다.
 
 ### 세션을 지원하는 고급 웹사이트 가져오기
 - **HTTP 요청**: `Fetcher` 클래스로 빠르고 은밀한 HTTP 요청. 브라우저의 TLS fingerprint, 헤더를 모방하고, HTTP/3를 사용할 수 있습니다.
@@ -230,13 +248,19 @@ MySpider().start()
 - **프록시 로테이션**: 모든 세션 타입에 대응하는 순환 또는 커스텀 전략의 내장 `ProxyRotator`와 요청별 프록시 오버라이드를 제공합니다.
 - **도메인 및 광고 차단**: 브라우저 기반 Fetcher에서 특정 도메인(및 하위 도메인)으로의 요청을 차단하거나 내장 광고 차단(약 3,500개의 알려진 광고/트래커 도메인)을 활성화합니다.
 - **DNS 유출 방지**: 프록시 사용 시 DNS 유출을 방지하기 위해 Cloudflare DoH를 통해 DNS 쿼리를 라우팅하는 선택적 DNS-over-HTTPS 지원.
+- **원격 브라우저**: 로컬에서 브라우저를 실행하는 대신 `cdp_url`로 CDP를 통해 이미 실행 중인 브라우저에 연결합니다. 같은 컴퓨터든 다른 호스트든, 관리형 브라우저 서비스든 상관없습니다. `executable_path`로 브라우저 기반 Fetcher가 직접 빌드한 Chromium을 사용하도록 지정할 수도 있습니다.
+- **백그라운드 API 캡처**: `capture_xhr`에 URL 패턴을 전달하면, 페이지가 로드되는 동안 발생한 일치하는 XHR/fetch 응답이 모두 `Response` 객체로 `response.captured_xhr`에 수집됩니다. 요청을 직접 리버스 엔지니어링하지 않고도 사이트의 API 데이터를 얻을 수 있습니다.
 - **비동기 지원**: 모든 Fetcher와 전용 비동기 세션 클래스에서 완전한 비동기를 지원합니다.
 
-### 적응형 스크레이핑 & AI 통합
+### 적응형 스크레이핑
 - 🔄 **스마트 요소 추적**: 지능적인 유사도 알고리즘으로 웹사이트 변경 후에도 요소를 재배치합니다.
 - 🎯 **유연한 스마트 선택**: CSS selector, XPath selector, 필터 기반 검색, 텍스트 검색, 정규식 검색 등을 지원합니다.
 - 🔍 **유사 요소 찾기**: 발견된 요소와 유사한 요소를 자동으로 찾아냅니다.
-- 🤖 **AI와 함께 사용하는 MCP 서버**: AI 기반 Web Scraping과 데이터 추출을 위한 내장 MCP 서버. AI(Claude/Cursor 등)에 전달하기 전에 Scrapling을 활용해 대상 콘텐츠를 추출하는 강력한 커스텀 기능을 갖추고 있어, 작업 속도를 높이고 토큰 사용량을 최소화해 비용을 절감합니다. ([데모 영상](https://www.youtube.com/watch?v=qyFk3ZNwOxE))
+
+### AI 기능
+- 🤖 **MCP 서버**: AI 챗봇과 에이전트(Claude/Cursor 등)가 Scrapling을 통해 스크래핑하도록 해줍니다. 일회성 도구와 세션 기반 도구가 일반 HTTP 요청(모든 메서드), 브라우저 가져오기, Cloudflare를 우회하는 스텔스 가져오기를 모두 지원합니다. 페이지는 AI에 전달되기 전에 CSS 선택자로 범위가 좁혀지고 프롬프트 인젝션 콘텐츠가 제거되므로, 에이전트는 더 적게 읽고 더 적게 비용을 쓰며 숨겨진 텍스트에 탈취당하지 않습니다. 스크린샷, CDP를 통한 원격 브라우저, 기본적으로 안전한 HTTP 전송도 포함됩니다. ([데모 영상](https://www.youtube.com/watch?v=qyFk3ZNwOxE))
+- 🧠 **Agent Skill**: 설치만 하면 되는 [Agent Skill](https://scrapling.readthedocs.io/en/latest/ai/agent-skill.html)이 코딩 에이전트에게 라이브러리 전체를 가르쳐, 에이전트가 Scrapling으로 작성하는 코드가 추측이 아니라 현재 API에 맞도록 해줍니다.
+- 📚 **RAG용 Markdown**: 한 줄(`page.markdown()`)로 어떤 페이지든 깨끗하고 정제된 LLM용 Markdown으로 변환하거나, `SiteToMarkdownSpider` 템플릿으로 웹사이트 전체를 Markdown 코퍼스로 크롤링할 수 있습니다. 과정에 LLM을 전혀 사용하지 않습니다. ([문서](https://scrapling.readthedocs.io/en/latest/ai/building-rag-systems.html))
 
 ### 고성능 & 실전 검증된 아키텍처
 - 🚀 **초고속**: 대부분의 Python 스크레이핑 라이브러리를 능가하는 최적화된 성능.
@@ -251,6 +275,7 @@ MySpider().start()
 - 🧬 **향상된 텍스트 처리**: 내장 정규식, 클리닝 메서드, 최적화된 문자열 연산을 제공합니다.
 - 📝 **자동 셀렉터 생성**: 모든 요소에 대해 견고한 CSS/XPath selector를 생성합니다.
 - 🔌 **익숙한 API**: Scrapy/Parsel에서 사용하는 것과 동일한 의사 요소(pseudo-element)를 가진 Scrapy/BeautifulSoup 스타일의 API.
+- 🤝 **Scrapy에 그대로 통합**: 이미 Scrapy를 쓰고 계신가요? 콜백에 `scrapling_response` 데코레이터만 붙이면 이미 가져오고 있는 응답을 Scrapling 파서로 파싱할 수 있습니다. 다시 작성할 필요가 없습니다.
 - 📘 **완전한 타입 커버리지**: 뛰어난 IDE 지원과 코드 자동완성을 위한 완전한 타입 힌트. 코드베이스 전체가 변경될 때마다 **PyRight**와 **MyPy**로 자동 검사됩니다.
 - 🔋 **바로 사용 가능한 Docker 이미지**: 매 릴리스마다 모든 브라우저를 포함한 Docker 이미지가 자동으로 빌드 및 푸시됩니다.
 
@@ -348,6 +373,16 @@ QuotesSpider(crawldir="./crawl_data").start()
 ```
 Ctrl+C를 누르면 정상적으로 일시정지되고, 진행 상황이 자동 저장됩니다. 이후 Spider를 다시 시작할 때 동일한 `crawldir`을 전달하면 중단된 지점부터 재개합니다.
 
+또는 바로 쓰는 템플릿으로 크롤링 로직 작성 자체를 건너뛸 수 있습니다. 예를 들어 Shopify 스토어의 전체 카탈로그를 가져오려면:
+```python
+from scrapling.spiders import ShopifySpider
+
+class MyStore(ShopifySpider):
+    target_website = "example.com"
+
+result = MyStore().start()  # 스토어의 모든 상품, 변형별로 항목 하나
+```
+
 ### 고급 파싱 & 내비게이션
 ```python
 from scrapling.fetchers import Fetcher
@@ -437,14 +472,14 @@ Scrapling은 강력할 뿐만 아니라 초고속입니다. 아래 벤치마크�
 
 | # |      Library      | Time (ms) | vs Scrapling |
 |---|:-----------------:|:---------:|:------------:|
-| 1 |     Scrapling     |   2.02    |     1.0x     |
-| 2 |   Parsel/Scrapy   |   2.04    |     1.01     |
-| 3 |     Raw Lxml      |   2.54    |    1.257     |
-| 4 |      PyQuery      |   24.17   |     ~12x     |
-| 5 |    Selectolax     |   82.63   |     ~41x     |
-| 6 |  MechanicalSoup   |  1549.71  |   ~767.1x    |
-| 7 |   BS4 with Lxml   |  1584.31  |   ~784.3x    |
-| 8 | BS4 with html5lib |  3391.91  |   ~1679.1x   |
+| 1 |     Scrapling     |   1.99    |     1.0x     |
+| 2 |   Parsel/Scrapy   |   2.06    |    1.035     |
+| 3 |     Raw Lxml      |   2.56    |    1.286     |
+| 4 |      PyQuery      |   23.98   |     ~12x     |
+| 5 |    Selectolax     |  197.02   |     ~99x     |
+| 6 |  MechanicalSoup   |  1545.15  |   ~776.5x    |
+| 7 |   BS4 with Lxml   |  1562.1  |   ~785.0x    |
+| 8 | BS4 with html5lib |  3412.73  |   ~1714.9x   |
 
 
 ### 요소 유사도 & 텍스트 검색 성능
@@ -453,8 +488,8 @@ Scrapling의 적응형 요소 찾기 기능은 대안들을 크게 앞섭니다:
 
 | Library     | Time (ms) | vs Scrapling |
 |-------------|:---------:|:------------:|
-| Scrapling   |   2.39    |     1.0x     |
-| AutoScraper |   12.45   |    5.209x    |
+| Scrapling   |   2.3    |     1.0x     |
+| AutoScraper |   12.58   |    5.47x    |
 
 
 > 모든 벤치마크는 100회 이상 실행의 평균입니다. 측정 방법은 [benchmarks.py](https://github.com/D4Vinci/Scrapling/blob/main/benchmarks.py)를 참조하세요.
@@ -494,6 +529,10 @@ pip install scrapling
    - MCP 서버 기능 설치:
        ```bash
        pip install "scrapling[ai]"
+       ```
+   - ([RAG 시스템 구축](https://scrapling.readthedocs.io/en/latest/ai/building-rag-systems.html))을 위한 의존성 설치:
+       ```bash
+       pip install "scrapling[rag]"
        ```
    - Shell 기능 (Web Scraping Shell 및 `extract` 명령어) 설치:
        ```bash

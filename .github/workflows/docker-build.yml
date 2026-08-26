@@ -7,10 +7,10 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Docker image tag'
-        required: true
-        default: 'latest'
+      version:
+        description: "Release version to tag the images with, like 'v0.4.15'. Leave it empty to only push 'latest'"
+        required: false
+        default: ''
 
 env:
   DOCKERHUB_IMAGE: pyd4vinci/scrapling
@@ -19,6 +19,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.user.login == github.repository_owner) }}
     permissions:
       contents: read
       packages: write
@@ -26,6 +27,22 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
+
+    # Releases come from the merged PR's title, the same source `release-and-publish.yml` uses, while a manual
+    # run can pass the version itself to republish an image the release build failed to push.
+    - name: Resolve the release version
+      id: version
+      env:
+        PR_TITLE: ${{ github.event.pull_request.title }}
+        INPUT_VERSION: ${{ inputs.version }}
+      run: |
+        VERSION="${INPUT_VERSION:-$PR_TITLE}"
+        if [[ $VERSION =~ ^v[0-9] ]]; then
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Tagging the images with $VERSION"
+        else
+          echo "No release version given ('$VERSION'); skipping the version tags."
+        fi
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -56,9 +73,8 @@ jobs:
         tags: |
           type=ref,event=branch
           type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}}
+          type=semver,pattern={{version}},value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.version != '' }}
+          type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.version != '' }}
           type=raw,value=latest,enable={{is_default_branch}}
         labels: |
           org.opencontainers.image.title=Scrapling
@@ -70,6 +86,7 @@ jobs:
           org.opencontainers.image.documentation=https://scrapling.readthedocs.io/en/latest/
 
     - name: Build and push Docker image
+      id: build
       uses: docker/build-push-action@v6
       with:
         context: .
@@ -78,7 +95,7 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-to: type=gha,mode=min,ignore-error=true
         build-args: |
           BUILDKIT_INLINE_CACHE=1
 

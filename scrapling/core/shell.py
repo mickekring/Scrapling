@@ -80,6 +80,7 @@ _HIDDEN_XPATH = XPath(
     " | .//template"
 )
 _ZWC_PATTERN = re_compile(r"[\u200b\u200c\u200d\ufeff\u2060\u180e]")
+_CONTROL_CHARS_PATTERN = re_compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 
 # Suppress exit on error to handle parsing errors gracefully
@@ -582,7 +583,12 @@ class Convertor:
     @classmethod
     def _convert_to_markdown(cls, body: TextHandler) -> str:
         """Convert HTML content to Markdown"""
-        from markdownify import markdownify
+        try:
+            from markdownify import markdownify
+        except (ImportError, ModuleNotFoundError) as e:
+            raise ModuleNotFoundError(
+                'Markdown conversion requires the "markdownify" package. Install it with: pip install "scrapling[rag]"'
+            ) from e
 
         return markdownify(body)
 
@@ -599,16 +605,17 @@ class Convertor:
         """Strip hidden content that could be used for prompt injection.
 
         Removes CSS-hidden elements, aria-hidden elements, <template> tags,
-        HTML comments, and zero-width Unicode characters.
+        HTML comments, zero-width Unicode characters, and XML-incompatible
+        control characters.
         """
         clean_root = deepcopy(page._root)
         for element in cast(list, _HIDDEN_XPATH(clean_root)):
             element.drop_tree()
         for element in clean_root.iter():
             if element.text:
-                element.text = _ZWC_PATTERN.sub("", element.text)
+                element.text = _CONTROL_CHARS_PATTERN.sub("", _ZWC_PATTERN.sub("", element.text))
             if element.tail:
-                element.tail = _ZWC_PATTERN.sub("", element.tail)
+                element.tail = _CONTROL_CHARS_PATTERN.sub("", _ZWC_PATTERN.sub("", element.tail))
         return Selector(root=clean_root, url=page.url, keep_comments=False)
 
     @classmethod

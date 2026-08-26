@@ -53,6 +53,19 @@ _whitelisted = {
     "for_": "for",
 }
 _T = TypeVar("_T")
+
+
+def _escape_css_string(value: str) -> str:
+    """Escape the characters that can't appear literally inside a CSS double-quoted string.
+
+    Line breaks have to be written as hexadecimal escapes, the trailing space ends the escape.
+    Backslashes are left alone on purpose: `cssselect` drops characters while unescaping them
+    (both `\\\\` and `\\5C ` lose the backslash and the character after it), so no form we could
+    emit here would match them anyway.
+    """
+    return value.replace('"', r"\"").replace("\n", r"\A ").replace("\r", r"\D ").replace("\f", r"\C ")
+
+
 # Pre-compiled selectors for efficiency
 _find_all_elements = XPath(".//*")
 _find_all_elements_with_spaces = XPath(
@@ -300,7 +313,9 @@ class Selector(SelectorsGeneration):
 
         ignored_elements: set[Any] = set()
         if ignore_tags:
-            ignored_elements.update(self._root.iter(*ignore_tags))
+            for element in self._root.iter(*ignore_tags):
+                if element not in ignored_elements:
+                    ignored_elements.update(element.iter())
 
         _all_strings = []
 
@@ -315,11 +330,7 @@ class Selector(SelectorsGeneration):
                 return False
 
             owner = parent.getparent() if text_node.is_tail else parent
-            while owner is not None:
-                if owner in ignored_elements:
-                    return False
-                owner = owner.getparent()
-            return True
+            return owner not in ignored_elements
 
         for text_node in cast(list[_ElementUnicodeResult], _find_all_text_nodes(self._root)):
             text = str(text_node)
@@ -762,9 +773,13 @@ class Selector(SelectorsGeneration):
         for tag in tags:
             selector = tag
             for key, value in attributes.items():
-                value = value.replace('"', r"\"")  # Escape double quotes in user input
                 # Not escaping anything with the key so the user can pass patterns like {'href*': '/p/'} or get errors :)
-                selector += '[{}="{}"]'.format(key, value)
+                if key == "class" and (class_names := value.split()):
+                    # `class` is a space-separated list, so exact-match [class="x"] misses class="x y"; match each name with ~=
+                    # An empty/blank value has no names to match, so it falls through to the exact match below
+                    selector += "".join('[class~="{}"]'.format(_escape_css_string(name)) for name in class_names)
+                else:
+                    selector += '[{}="{}"]'.format(key, _escape_css_string(value))
             if selector != "*":
                 selectors.append(selector)
 
@@ -1117,7 +1132,7 @@ class Selector(SelectorsGeneration):
 
         possible_targets = cast(List, _find_all_elements_with_spaces(self._root))
         if possible_targets:
-            for node in self.__elements_convertor(possible_targets):
+            for node in map(self.__element_convertor, possible_targets):
                 """Check if element matches given text otherwise, traverse the children tree and iterate"""
                 node_text: TextHandler = node.text
                 if clean_match:
@@ -1179,7 +1194,7 @@ class Selector(SelectorsGeneration):
 
         possible_targets = cast(List, _find_all_elements_with_spaces(self._root))
         if possible_targets:
-            for node in self.__elements_convertor(possible_targets):
+            for node in map(self.__element_convertor, possible_targets):
                 """Check if element matches given regex otherwise, traverse the children tree and iterate"""
                 node_text = node.text
                 if node_text.re(

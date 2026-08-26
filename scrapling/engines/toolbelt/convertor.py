@@ -3,6 +3,7 @@ from re import compile as re_compile
 
 from curl_cffi.requests import Response as CurlResponse
 from playwright._impl._errors import Error as PlaywrightError
+from patchright._impl._errors import Error as PatchrightError
 from playwright.sync_api import Page as SyncPage, Response as SyncResponse
 from playwright.async_api import Page as AsyncPage, Response as AsyncResponse
 
@@ -122,6 +123,7 @@ class ResponseFactory:
         try:
             if page and "html" in final_response.all_headers().get("content-type", ""):
                 page_content = cls._get_page_content(page).encode("utf-8")
+                encoding = "utf-8"
             else:
                 page_content = final_response.body()
         except Exception as e:  # pragma: no cover
@@ -205,7 +207,7 @@ class ResponseFactory:
         for _ in range(max_retries):
             try:
                 return page.content() or ""
-            except PlaywrightError:
+            except (PlaywrightError, PatchrightError):
                 page.wait_for_timeout(500)
         raise RuntimeError(f"Failed to retrieve the page content after retrying for {max_retries * 500}ms.")
 
@@ -220,7 +222,7 @@ class ResponseFactory:
         for _ in range(max_retries):
             try:
                 return (await page.content()) or ""
-            except PlaywrightError:
+            except (PlaywrightError, PatchrightError):
                 await page.wait_for_timeout(500)
         raise RuntimeError(f"Failed to retrieve the page content after retrying for {max_retries * 500}ms.")
 
@@ -269,6 +271,7 @@ class ResponseFactory:
         try:
             if page and "html" in (await final_response.all_headers()).get("content-type", ""):
                 page_content = (await cls._get_async_page_content(page)).encode("utf-8")
+                encoding = "utf-8"
             else:
                 page_content = await final_response.body()
         except Exception as e:  # pragma: no cover

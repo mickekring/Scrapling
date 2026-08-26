@@ -121,6 +121,94 @@ class MySitemap(SitemapSpider):
 
 Set `sitemap_alternate_links = True` to also dispatch `<xhtml:link rel="alternate" hreflang="...">` URLs through your rules.
 
+## XMLFeedSpider
+
+`XMLFeedSpider` iterates over the nodes of an XML feed (RSS, Atom, product feeds, etc.). Set `itertag` to the node name you want (default: `"item"`) and override `parse_node()`, which is called once per matching node:
+
+```python
+from scrapling.spiders import XMLFeedSpider
+
+class RSSSpider(XMLFeedSpider):
+    name = "rss"
+    start_urls = ["https://example.com/feed.xml"]
+    itertag = "item"
+
+    async def parse_node(self, response, node):
+        yield {
+            "title": node.findtext("title"),
+            "link": node.findtext("link"),
+            "date": node.findtext("pubDate"),
+        }
+
+result = RSSSpider().start()
+```
+
+Like the other callbacks, `parse_node()` can also yield `Request` objects (for example, `response.follow(node.findtext("link"), callback=self.parse_post)`) to crawl into the pages the feed points to.
+
+### How nodes are matched and parsed
+
+Each node passed to `parse_node()` is an `lxml` element with all namespaces stripped, so `node.findtext("title")`, `node.find("thumbnail").get("url")`, and case-sensitive `node.xpath(...)` work on any feed without namespace maps. A plain `itertag` like `"entry"` matches nodes by name regardless of their namespace, which is what you want for Atom and most namespaced feeds. To match a node in one specific namespace, use a prefixed `itertag` and define the prefix in `namespaces`:
+
+```python
+class ThumbnailSpider(XMLFeedSpider):
+    name = "thumbs"
+    start_urls = ["https://example.com/feed.xml"]
+    itertag = "media:thumbnail"
+    namespaces = (("media", "http://search.yahoo.com/mrss/"),)
+
+    async def parse_node(self, response, node):
+        yield {"thumbnail": node.get("url")}
+```
+
+Gzipped feeds (`.xml.gz` or served with a gzip content-type) are decompressed automatically with the same protections the sitemap spider uses, and malformed XML logs a warning instead of crashing the crawl.
+
+## CSVFeedSpider
+
+`CSVFeedSpider` iterates over the rows of a CSV feed. Override `parse_row()`, which receives each row as a dictionary keyed by the column names:
+
+```python
+from scrapling.spiders import CSVFeedSpider
+
+class PriceSpider(CSVFeedSpider):
+    name = "prices"
+    start_urls = ["https://example.com/products.csv"]
+
+    async def parse_row(self, response, row):
+        yield {"product": row["title"], "price": float(row["price"])}
+
+result = PriceSpider().start()
+```
+
+By default, the first row of the feed is used as the header. If the feed has no header row, set `headers` to the column names yourself, and use `delimiter`/`quotechar` for feeds that don't follow the standard comma format:
+
+```python
+class PriceSpider(CSVFeedSpider):
+    name = "prices"
+    start_urls = ["https://example.com/products.csv"]
+    headers = ["title", "price", "url"]
+    delimiter = ";"
+```
+
+Gzipped feeds are decompressed automatically here as well, as shown above for **XMLFeedSpider**.
+
+## SiteToMarkdownSpider
+
+`SiteToMarkdownSpider` builds on **CrawlSpider** to crawl a website and convert every page to clean, LLM-ready Markdown, yielding one item per page (`url`, `title`, `markdown` keys) and optionally writing one Markdown file per page:
+
+```python
+from scrapling.spiders import SiteToMarkdownSpider
+
+class DocsSpider(SiteToMarkdownSpider):
+    name = "docs"
+    start_urls = ["https://example.com/docs/"]
+    allowed_domains = {"example.com"}
+    output_dir = "docs_markdown"
+
+result = DocsSpider().start()
+```
+
+It requires `allowed_domains` to keep the crawl bound to the target website. Options: `css_selector`/`main_content_only` (passed to `markdown()` per page, `main_content_only` enabled by default), `output_dir`, and `max_pages` (max pages to convert, `0` disables). Every page link inside `allowed_domains` is followed by default; override `rules()` with a `LinkExtractor` (`allow` to narrow the crawl, `deny` to drop URL patterns) to control it. The full guide is in `../building-rag-systems.md`.
+
 ## Using `LinkExtractor` directly
 
 You don't have to use the templates. `LinkExtractor` works inside any plain `Spider`:

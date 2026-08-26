@@ -1,3 +1,4 @@
+from os import environ
 from pathlib import Path
 from subprocess import check_output
 from sys import executable as python_executable
@@ -11,7 +12,7 @@ from scrapling.core._types import List, Optional, Dict, Tuple, Any, Callable
 from orjson import loads as json_loads, JSONDecodeError
 
 try:
-    from click import command, option, Choice, group, argument, version_option
+    from click import command, option, Choice, group, argument, version_option, UsageError
 except (ImportError, ModuleNotFoundError) as e:
     raise ModuleNotFoundError(
         "You need to install scrapling with any of the extras to enable Shell commands. See: https://scrapling.readthedocs.io/en/latest/#installation"
@@ -151,17 +152,49 @@ def install(force):  # pragma: no cover
 @option(
     "--host",
     type=str,
-    default="0.0.0.0",
-    help="The host to use if streamable-http transport is enabled (Default: '0.0.0.0')",
+    default="127.0.0.1",
+    help="The host to use if streamable-http transport is enabled. Pass '0.0.0.0' to accept connections from "
+    "the network (Default: '127.0.0.1')",
 )
 @option(
     "--port", type=int, default=8000, help="The port to use if streamable-http transport is enabled (Default: 8000)"
 )
-def mcp(http, host, port):
+@option(
+    "--executable-path",
+    type=str,
+    default=None,
+    help="Path to a custom Chromium-compatible browser executable for browser-based MCP tools",
+)
+@option(
+    "--auth-token",
+    type=str,
+    default=None,
+    help="Require clients to send this token as `Authorization: Bearer <token>` (streamable-http only). "
+    "Setting the SCRAPLING_MCP_AUTH_TOKEN environment variable instead keeps it out of the process list",
+)
+@option(
+    "--allowed-host",
+    type=str,
+    multiple=True,
+    help="Enable DNS-rebinding protection and accept requests for this host only, like 'mcp.example.com:8000' "
+    "(repeatable). Recommended whenever the server listens on a public address",
+)
+@option(
+    "--no-auth",
+    is_flag=True,
+    default=False,
+    help="Serve the streamable-http transport without authentication (not recommended). Without it, `--http` "
+    "refuses to start unless a token is given",
+)
+def mcp(http, host, port, executable_path, auth_token, allowed_host, no_auth):
     from scrapling.core.ai import ScraplingMCPServer
 
-    server = ScraplingMCPServer()
-    server.serve(http, host, port)
+    server = ScraplingMCPServer(executable_path=executable_path, auth_token=auth_token)
+    try:
+        server.serve(http, host, port, allowed_hosts=allowed_host, allow_unauthenticated=no_auth)
+    except ValueError as e:
+        # Turn the unauthenticated-HTTP refusal into a clean CLI error instead of a traceback
+        raise UsageError(str(e)) from e
 
 
 @command(help="Interactive scraping console")
@@ -265,6 +298,12 @@ def _common_browser_options(f):
             is_flag=True,
             default=False,
             help="Extract only main content and sanitize hidden elements for AI consumption (default: False)",
+        ),
+        option(
+            "--executable-path",
+            type=str,
+            default=None,
+            help="Path to a custom Chromium-compatible browser executable. Falls back to the SCRAPLING_EXECUTABLE_PATH environment variable when not set.",
         ),
         option(
             "--extra-headers",
@@ -513,6 +552,7 @@ def __build_browser_kwargs(
     parsed_headers,
     dns_over_https,
     block_ads,
+    executable_path,
 ) -> Dict[str, Any]:
     """Build shared kwargs dict for browser-based commands."""
     kwargs: Dict[str, Any] = {
@@ -533,6 +573,9 @@ def __build_browser_kwargs(
         kwargs["proxy"] = proxy
     if parsed_headers:
         kwargs["extra_headers"] = parsed_headers
+    executable_path = executable_path or environ.get("SCRAPLING_EXECUTABLE_PATH") or None
+    if executable_path:
+        kwargs["executable_path"] = executable_path
     return kwargs
 
 
@@ -555,6 +598,7 @@ def fetch(
     proxy,
     extra_headers,
     ai_targeted,
+    executable_path,
     dns_over_https,
     block_ads,
 ):
@@ -573,6 +617,7 @@ def fetch(
         parsed_headers,
         dns_over_https,
         block_ads,
+        executable_path,
     )
     from scrapling.fetchers import DynamicFetcher
 
@@ -618,6 +663,7 @@ def stealthy_fetch(
     allow_webgl,
     hide_canvas,
     ai_targeted,
+    executable_path,
     dns_over_https,
     block_ads,
 ):
@@ -636,6 +682,7 @@ def stealthy_fetch(
         parsed_headers,
         dns_over_https,
         block_ads,
+        executable_path,
     )
     kwargs.update(
         {
