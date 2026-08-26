@@ -39,7 +39,7 @@ skip the ladder — fastest and cheapest.
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | `GET`  | `/health` | no | Liveness probe (Coolify) |
-| `GET`  | `/` | no | Service info |
+| `GET`  | `/` | no | Service info + the deployed `scrapling_version` |
 | `POST` | `/scrape` | yes | Main endpoint |
 | `GET`  | `/scrape` | yes | Convenience (query params) |
 | `GET`  | `/docs` | no | Interactive OpenAPI docs |

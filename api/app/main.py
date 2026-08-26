@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from scrapling import __version__ as SCRAPLING_VERSION
 
 from .config import get_settings
 from .models import Engine, Format, ProxyMode, ScrapeRequest, ScrapeResponse
@@ -30,8 +31,8 @@ async def lifespan(app: FastAPI):
         log.warning("API_KEY is not set — the API is OPEN. Set API_KEY before exposing this publicly.")
     if not proxy_available():
         log.warning("APIFY_PROXY_PASSWORD is not set — proxy modes 'on'/'auto' will run without a proxy.")
-    log.info("Scrapling Scrape API ready (engine=%s, proxy=%s, format=%s).",
-             s.default_engine, s.default_proxy, s.default_format)
+    log.info("Scrapling Scrape API ready on scrapling %s (engine=%s, proxy=%s, format=%s).",
+             SCRAPLING_VERSION, s.default_engine, s.default_proxy, s.default_format)
     yield
 
 
@@ -62,6 +63,8 @@ async def root() -> dict:
     return {
         "name": "Scrapling Scrape API",
         "version": app.version,
+        # The pinned upstream version, so a deploy can be verified over HTTP.
+        "scrapling_version": SCRAPLING_VERSION,
         "docs": "/docs",
         "proxy_configured": proxy_available(),
         "defaults": {"engine": s.default_engine, "proxy": s.default_proxy, "format": s.default_format},
