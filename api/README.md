@@ -142,16 +142,20 @@ domain, `https://host:8000`, but can still hit the label bug above.)
 
 ## Deploy on Dokploy
 
-Dokploy splits Coolify's single *Base Directory* into two fields, and the default of the second
-one has flip-flopped between Dokploy releases ([Dokploy#5417](https://github.com/Dokploy/dokploy/issues/5417)):
-in some versions an empty **Docker Context Path** means the repo root, in others the Dockerfile's
-own folder. Set both explicitly so the build doesn't depend on which Dokploy version you're on:
+Dokploy splits Coolify's single *Base Directory* into **Dockerfile Path** and **Docker Context Path**,
+and the context path is joined to the repo root *without* the Build Path. Set it explicitly:
 
 1. **Build Type: `Dockerfile`**, branch **`feat/scrape-api`**.
-2. **Dockerfile Path: `api/Dockerfile`**
-3. **Docker Context Path: `api`** — not empty, not `.`. The Dockerfile COPYs `requirements.txt`
-   and `app/` relative to this folder.
+2. **Dockerfile Path: `api/Dockerfile`** (or Build Path `/api` + `Dockerfile` — both resolve the same).
+3. **Docker Context Path: `api`** — the Dockerfile COPYs `requirements.txt` and `app/` relative to it.
 4. The rest as for Coolify: expose port `8000`, give Chromium `--shm-size=1g`, set the env vars.
+
+**Do not put `.` in Docker Context Path.** Empty derives the context from the Dockerfile's own folder
+(works), but a literal `.` — which the form shows as its placeholder, and which at least one release
+saved on its own — is the **repo root**, where `requirements.txt` and `app/` don't exist. The
+empty-field default is also slated to change to the repo root
+([Dokploy#5417](https://github.com/Dokploy/dokploy/issues/5417)), so `api` is the only value that is
+stable across versions.
 
 **Symptom of the wrong context:** the build log shows `load .dockerignore … transferring context: 978B`
 (that is the repo-root `.dockerignore`, 936 bytes — the `api/` one is 89 bytes), then `load build
