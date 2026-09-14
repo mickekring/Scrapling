@@ -150,12 +150,13 @@ and the context path is joined to the repo root *without* the Build Path. Set it
 3. **Docker Context Path: `api`** — the Dockerfile COPYs `requirements.txt` and `app/` relative to it.
 4. The rest as for Coolify: expose port `8000`, give Chromium `--shm-size=1g`, set the env vars.
 
-**Do not put `.` in Docker Context Path.** Empty derives the context from the Dockerfile's own folder
-(works), but a literal `.` — which the form shows as its placeholder, and which at least one release
-saved on its own — is the **repo root**, where `requirements.txt` and `app/` don't exist. The
-empty-field default is also slated to change to the repo root
-([Dokploy#5417](https://github.com/Dokploy/dokploy/issues/5417)), so `api` is the only value that is
-stable across versions.
+**Do not leave Docker Context Path empty, and do not put `.` in it.** A literal `.` is always the
+**repo root**, where `requirements.txt` and `app/` don't exist. An *empty* field has meant different
+things in different Dokploy releases — the Dockerfile's own folder in some, the repo root in others,
+and it is slated to become the repo root for good
+([Dokploy#5417](https://github.com/Dokploy/dokploy/issues/5417)). An empty field is what broke a
+deploy in September 2026 that had worked untouched three weeks earlier. `api` is the only value
+that is stable across versions.
 
 **Symptom of the wrong context:** the build log shows `load .dockerignore … transferring context: 978B`
 (that is the repo-root `.dockerignore`, 936 bytes — the `api/` one is 89 bytes), then `load build
