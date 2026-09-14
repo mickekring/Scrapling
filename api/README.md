@@ -3,7 +3,7 @@
 A thin, self-contained REST wrapper around [Scrapling](https://github.com/D4Vinci/Scrapling).
 Send one URL, get back **HTML / text / markdown**. It auto-escalates through
 Scrapling's three fetch tiers and can route through an **Apify proxy** for
-geo-blocked sites. Built for calling from **n8n** and deploying on **Coolify**.
+geo-blocked sites. Built for calling from **n8n** and deploying on **Coolify** (or **Dokploy**).
 
 > **It lives outside the library on purpose.** This folder only *imports*
 > `scrapling` as a pinned dependency (see [requirements.txt](requirements.txt)) and
@@ -139,6 +139,23 @@ domain, `https://host:8000`, but can still hit the label bug above.)
 > `docker compose up --build` (it already sets `shm_size: 1gb`).
 
 > The image bundles Chromium (~1–1.5 GB); the first build takes a few minutes.
+
+## Deploy on Dokploy
+
+Dokploy splits Coolify's single *Base Directory* into two fields, and the default of the second
+one has flip-flopped between Dokploy releases ([Dokploy#5417](https://github.com/Dokploy/dokploy/issues/5417)):
+in some versions an empty **Docker Context Path** means the repo root, in others the Dockerfile's
+own folder. Set both explicitly so the build doesn't depend on which Dokploy version you're on:
+
+1. **Build Type: `Dockerfile`**, branch **`feat/scrape-api`**.
+2. **Dockerfile Path: `api/Dockerfile`**
+3. **Docker Context Path: `api`** — not empty, not `.`. The Dockerfile COPYs `requirements.txt`
+   and `app/` relative to this folder.
+4. The rest as for Coolify: expose port `8000`, give Chromium `--shm-size=1g`, set the env vars.
+
+**Symptom of the wrong context:** the build log shows `load .dockerignore … transferring context: 978B`
+(that is the repo-root `.dockerignore`, 936 bytes — the `api/` one is 89 bytes), then `load build
+context … 2B`, and `COPY requirements.txt .` fails with `"/requirements.txt": not found`.
 
 ## Calling from n8n
 
