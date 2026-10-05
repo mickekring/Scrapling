@@ -23,11 +23,20 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 RUN python -m playwright install --with-deps chromium \
  && python -m patchright install chromium
 
-# 3) Application code
+# 3) A real init as PID 1. Chromium's exited helpers (chrome, chrome_crashpad) are
+#    reparented to PID 1 when their browser closes; uvicorn never wait()s for them,
+#    so without an init they pile up as zombies until the container's pids limit is
+#    hit and no browser can be spawned. tini reaps them.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tini \
+ && rm -rf /var/lib/apt/lists/*
+
+# 4) Application code
 COPY app ./app
 
 EXPOSE 8000
 
 # Single worker on purpose: browser fetches are heavy and are gated by an
 # in-process CapacityLimiter. Scale out with more containers, not more workers.
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

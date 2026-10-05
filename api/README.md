@@ -178,6 +178,10 @@ The stealth tier can take ~30–90 s (a Cloudflare solve measured 75 s on the Co
 - **SSRF**: the service fetches arbitrary URLs. It accepts only `http`/`https`
   and the HTTP tier uses `follow_redirects="safe"` (rejects redirects to private
   IPs). Keep the API behind its API key; consider an allow-list if exposed widely.
+- **Zombie reaping**: the image runs `tini` as PID 1. Without an init, Chromium's exited helper
+  processes accumulate as zombies (~80/min under load) until the container's pids limit is hit
+  and the browser tiers stop working while the HTTP tier still answers. If you override the
+  entrypoint, keep an init (`--init` / `init: true`).
 - **Concurrency**: browser tiers are capped by `MAX_CONCURRENT_BROWSERS`. Scale by
   running more containers, not more uvicorn workers.
 - **Proxy cost**: a browser pulls every asset through the proxy. `country` support
