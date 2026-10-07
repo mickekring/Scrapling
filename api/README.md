@@ -135,6 +135,22 @@ works from the service's terminal in Coolify — it's purely proxy/port routing.
 build pack make sure **Ports Exposes = 8000**. (The Compose build pack instead needs the port on the
 domain, `https://host:8000`, but can still hit the label bug above.)
 
+**Troubleshooting: build fails at "Downloading Chrome for Testing … timed out".** The usual cause is a
+server with broken IPv6: it has an IPv6 address, but IPv6 connections hang. Coolify's build uses the
+server's own network, and Playwright's downloader there doesn't fall back to IPv4, so it times out. apt
+and pip in the same build work fine. To confirm, run this on the server:
+`curl -6 -sS -o /dev/null --max-time 10 https://cdn.playwright.dev/`. A timeout confirms it. Fix it on
+the server by switching IPv6 off, which persists across reboots:
+
+```bash
+printf 'net.ipv6.conf.all.disable_ipv6 = 1\nnet.ipv6.conf.default.disable_ipv6 = 1\n' \
+  > /etc/sysctl.d/99-disable-ipv6.conf && sysctl --system
+```
+
+Only do this if the domain's DNS has no AAAA record pointing at the server. Plain `curl` tests can look
+fine, because curl falls back to IPv4. Test the host network the way the build does:
+`docker run --rm --network host python:3.12-slim sh -c "pip install -q playwright && python -m playwright install chromium"`.
+
 > Local testing still uses the compose file: uncomment its `ports:` block and run
 > `docker compose up --build` (it already sets `shm_size: 1gb`).
 
