@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     max_concurrent_browsers: int = 2     # cap simultaneous browser launches (memory guard)
     request_max_seconds: int = 240       # overall per-request escalation budget (covers slow stealth sites)
 
+    # --- Browser watchdog (see app/watchdog.py) ---------------------------
+    # Periodically launches a headless browser; after N consecutive failures the
+    # process exits so Docker's restart policy starts a fresh container.
+    watchdog_enabled: bool = True
+    watchdog_interval_seconds: int = 300
+    watchdog_max_failures: int = 3       # ~15 min of failures at the default interval
+    watchdog_probe_timeout_seconds: int = 60
+
 
 @lru_cache
 def get_settings() -> Settings:

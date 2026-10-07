@@ -39,6 +39,7 @@ skip the ladder — fastest and cheapest.
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | `GET`  | `/health` | no | Liveness probe (Coolify) |
+| `GET`  | `/health/browser` | no | Can a browser still be launched? 503 while failing — for an uptime monitor |
 | `GET`  | `/` | no | Service info + the deployed `scrapling_version` |
 | `POST` | `/scrape` | yes | Main endpoint |
 | `GET`  | `/scrape` | yes | Convenience (query params) |
@@ -194,6 +195,15 @@ The stealth tier can take ~30–90 s (a Cloudflare solve measured 75 s on the Co
 - **SSRF**: the service fetches arbitrary URLs. It accepts only `http`/`https`
   and the HTTP tier uses `follow_redirects="safe"` (rejects redirects to private
   IPs). Keep the API behind its API key; consider an allow-list if exposed widely.
+- **Self-healing**: `/health` only proves the web server answers. It stayed green through a 30-hour
+  outage in which no browser could be launched. So the app also runs a watchdog. Every
+  `WATCHDOG_INTERVAL_SECONDS` (300) it launches a headless browser on a local page. After
+  `WATCHDOG_MAX_FAILURES` (3) failures in a row it exits with code 1, and the container's restart policy
+  starts a fresh one. Docker and Coolify never restart a container just for being *unhealthy*, which
+  is why the app exits on its own. `GET /health/browser` shows the last result, the error, the pids
+  used vs the limit, and the zombie count. To get told when this happens, point an uptime monitor
+  (e.g. Uptime Kuma) at it. For the restart to happen, the container's restart policy must not be
+  `no`. Check with `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' <container>`.
 - **Zombie reaping**: the image runs `tini` as PID 1. Without an init, Chromium's exited helper
   processes accumulate as zombies (~80/min under load) until the container's pids limit is hit
   and the browser tiers stop working while the HTTP tier still answers. If you override the

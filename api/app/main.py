@@ -2,23 +2,27 @@
 
 Endpoints:
   GET  /health         liveness probe (no auth) — for Coolify
+  GET  /health/browser can a browser still be launched? (no auth) — for an uptime monitor
   GET  /               service info (no auth)
   POST /scrape         main endpoint (JSON body)        [auth]
   GET  /scrape         convenience for quick tests/n8n  [auth]
   GET  /docs           interactive OpenAPI docs (FastAPI)
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.responses import JSONResponse
 from scrapling import __version__ as SCRAPLING_VERSION
 
 from .config import get_settings
 from .models import Engine, Format, ProxyMode, ScrapeRequest, ScrapeResponse
 from .proxy import proxy_available
 from .scraper import scrape
+from . import watchdog
 
 log = logging.getLogger("scrapling_api")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -33,7 +37,14 @@ async def lifespan(app: FastAPI):
         log.warning("APIFY_PROXY_PASSWORD is not set — proxy modes 'on'/'auto' will run without a proxy.")
     log.info("Scrapling Scrape API ready on scrapling %s (engine=%s, proxy=%s, format=%s).",
              SCRAPLING_VERSION, s.default_engine, s.default_proxy, s.default_format)
+    task = None
+    if s.watchdog_enabled:
+        task = asyncio.create_task(watchdog.run(s))
+        log.info("Browser watchdog on: probe every %ss, restart after %d consecutive failures.",
+                 s.watchdog_interval_seconds, s.watchdog_max_failures)
     yield
+    if task:
+        task.cancel()
 
 
 app = FastAPI(
@@ -55,6 +66,13 @@ async def require_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-K
 @app.get("/health", tags=["meta"])
 async def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/health/browser", tags=["meta"])
+async def health_browser() -> JSONResponse:
+    """200 while the last browser probe passed (or none has run yet), 503 while failing."""
+    report = watchdog.report(get_settings())
+    return JSONResponse(report, status_code=503 if report["status"] == "failing" else 200)
 
 
 @app.get("/", tags=["meta"])
