@@ -46,6 +46,18 @@ _GEO_MARKERS = (
     "not available in the country", "this content isn't available in your",
 )
 
+# An UNSOLVED bot wall that still carries enough text to pass the visible-text gate.
+# Only trusted on thin pages (below _THIN_PAGE_CHARS), so a real article that merely mentions
+# one of these phrases isn't rejected. Deliberately excludes Cloudflare's `challenge-platform`
+# script path: Cloudflare injects it into many normal (and solved) pages.
+_WALL_MARKERS = (
+    "sp_rotated_captcha",          # ServicePipe rotate-the-image captcha (tass.ru, 548 visible chars)
+    "а не с ботом",                # ServicePipe RU: "...that we're dealing with you, not a bot"
+    "verify you are human",        # Cloudflare / Turnstile interstitial left unsolved
+    "checking your browser before accessing",
+)
+_THIN_PAGE_CHARS = 1500
+
 # One shared limiter (not loop-bound) caps concurrent browser launches.
 _browser_limiter = anyio.CapacityLimiter(max(1, get_settings().max_concurrent_browsers))
 
@@ -126,11 +138,16 @@ def _classify(page, html: str, status: Optional[int], err: Optional[str], s: Set
     # Gate success on real VISIBLE TEXT, not raw markup. A 200 that is only a JS
     # shell, or a 200-status anti-bot interstitial, carries plenty of markup but
     # ~no text -- it must NOT count as success; it should escalate to a browser.
-    content_ok = len(_visible_text(page).strip()) >= s.min_content_chars
+    text_len = len(_visible_text(page).strip())
+    content_ok = text_len >= s.min_content_chars
 
-    # Decide SUCCESS first. A 2xx with real text is the page -- and a *solved*
-    # anti-bot challenge lands here too, so incidental challenge words in
-    # legitimate content can't be mistaken for an unsolved wall.
+    # A captcha page can pass that gate on text alone; on a thin page, its fingerprint wins.
+    if content_ok and text_len < _THIN_PAGE_CHARS and _looks(_WALL_MARKERS, html):
+        return Outcome.CHALLENGE
+
+    # Otherwise decide SUCCESS before the marker checks below. A 2xx with real text is the
+    # page -- and a *solved* anti-bot challenge lands here too, so incidental challenge words
+    # in legitimate content can't be mistaken for an unsolved wall.
     if status is not None and 200 <= status < 300 and content_ok:
         return Outcome.OK
 

@@ -27,7 +27,10 @@ Two **orthogonal** axes — they fix different problems:
 
 With `engine=auto` the service walks the engine ladder and **stops at the first
 rung that returns real content**: a 2xx with at least `MIN_CONTENT_CHARS` (200) of visible
-text. A challenge (403, "Just a moment…") jumps straight to `stealth`. The proxy is a
+text. One exception: a *thin* page (under 1,500 visible characters) carrying a known bot-wall
+fingerprint counts as a challenge even if it has enough text. Example: tass.ru's ServicePipe
+"rotate the picture" captcha, which has 548 characters. A challenge (403, "Just a moment…") jumps
+straight to `stealth`. The proxy is a
 separate sticky decision:
 
 - `proxy=off` — never use it.
