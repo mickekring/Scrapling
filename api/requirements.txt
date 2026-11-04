@@ -2,7 +2,7 @@
 # Bump this deliberately (and re-test) to adopt a newer Scrapling.
 # [rag] = [fetchers] + markdownify (HTML -> Markdown, imported lazily by
 # scrapling.core.shell.Convertor). Since 0.4.15 markdownify lives behind this extra.
-scrapling[rag]==0.4.15
+scrapling[rag]==0.5
 
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.34,<1.0

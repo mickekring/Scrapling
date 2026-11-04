@@ -19,9 +19,16 @@ Two **orthogonal** axes — they fix different problems:
 | **Engine** | `http` → `dynamic` → `stealth` | JavaScript rendering, anti-bot (Cloudflare) |
 | **Proxy** | `off` / `on` / `auto` | Geo-blocks, IP bans, rate-limits |
 
+- `http`: a plain request with Chrome's network fingerprint (curl_cffi). Milliseconds.
+- `dynamic`: a real browser that runs the page's JavaScript.
+- `stealth`: the same browser plus Scrapling's Cloudflare solver. Since Scrapling v0.5 both
+  browser tiers run on the stealth (patchright) browser. `dynamic` skips the solver, because the
+  solver costs ~5 s even on pages without a challenge (31 s → 126 s measured on gazeta.ru).
+
 With `engine=auto` the service walks the engine ladder and **stops at the first
-rung that returns real content** (2xx, no challenge fingerprint, non-trivial
-body). The proxy is a separate sticky decision:
+rung that returns real content**: a 2xx with at least `MIN_CONTENT_CHARS` (200) of visible
+text. A challenge (403, "Just a moment…") jumps straight to `stealth`. The proxy is a
+separate sticky decision:
 
 - `proxy=off` — never use it.
 - `proxy=on` — use it on every rung.
@@ -30,6 +37,25 @@ body). The proxy is a separate sticky decision:
   of the run. A final `stealth + proxy` fallback covers the geo **and** anti-bot case.
 
 Every rung tried is returned in `attempts[]` so you can see exactly how a URL was routed.
+Its `outcome` is one of `ok`, `challenge`, `geo_block`, `empty`, `error` or `local_error`.
+`local_error` means **this server** couldn't run the fetch (the browser failed to start or
+died), not that the site blocked it.
+
+### The browser (`BROWSER_MODE`)
+
+- **`persistent`** (default). The browser tiers share one long-running browser whose tabs are
+  reused, instead of launching Chromium for every attempt. Measured on 8 fetches: 0.76 s instead of
+  2.0 s median, and 10 processes spawned instead of 78.
+  - **Proxies:** a browser has a fixed proxy, so there is one for direct requests and one for the
+    Apify proxy (started on first use). Requests with a specific `country` get a one-off browser.
+  - **Cookies:** requests on the same browser share cookies. A solved Cloudflare clearance is
+    reused, which makes repeat visits faster, but different callers visiting the same site share
+    its cookies.
+  - **Recycling:** the browser is replaced every `BROWSER_RECYCLE_AFTER` (200) pages, which bounds
+    memory and cookie build-up, and immediately if it dies. In-flight requests finish on the old one.
+- **`per_request`**: a fresh browser for every attempt (the behaviour before v0.5). The fallback
+  if the persistent browser ever misbehaves.
+
 
 If you already know what a site needs, set `engine`/`proxy`/`country` explicitly to
 skip the ladder — fastest and cheapest.
@@ -59,7 +85,8 @@ for local dev, **set it before exposing publicly**.)
   "country": "US",             // optional, Apify geo-targeting
   "css_selector": null,        // optional, extract only matching elements
   "main_content_only": true,   // strip to <body>, drop script/style/hidden noise
-  "lean": false                // browser tiers skip heavy resources to save proxy bandwidth (see below)
+  "lean": false,               // browser tiers skip heavy resources to save proxy bandwidth (see below)
+  "pierce_shadow": false       // include open Shadow DOM (web components); browser tiers only
 }
 ```
 
@@ -82,6 +109,13 @@ Measured on 2026-11-04, bytes through a counting proxy, `engine=dynamic`:
 | tass.ru | 3.6 MB | — | lean gets an error page → automatic full retry |
 
 The Cloudflare demo still solves with lean on (7–18 s, versus ~70 s in full mode).
+Re-measured on v0.5 through the proxy session: gazeta.ru 5.4 MB → 1.1 MB, 20 s → 2.5 s, same 122 links.
+
+**`pierce_shadow`** (default `false`). Content inside open Shadow DOM (web components) is invisible
+to a normal page capture. With this flag it is included, as `<shadow-root>` elements. Shadow DOM
+only exists after JavaScript runs, so with `engine=auto` the http tier is skipped. These requests
+always get a one-off browser: in Scrapling 0.5, the first fetch on a reused tab after a Cloudflare
+solve loses its shadow content.
 
 ### Response
 
@@ -229,6 +263,9 @@ The stealth tier can take ~30–90 s (a Cloudflare solve measured 75 s on the Co
   processes accumulate as zombies (~80/min under load) until the container's pids limit is hit
   and the browser tiers stop working while the HTTP tier still answers. If you override the
   entrypoint, keep an init (`--init` / `init: true`).
+- **Scrapling v0.5 output changes** (compared with 0.4.15): Markdown from several selected
+  elements now has blank lines between them, and hidden-content cleaning keeps more visible
+  elements (e.g. `opacity:0.95`) and removes more hidden ones. Exact-output comparisons may differ.
 - **Concurrency**: browser tiers are capped by `MAX_CONCURRENT_BROWSERS`. Scale by
   running more containers, not more uvicorn workers.
 - **Proxy cost**: a browser pulls every asset through the proxy. `country` support

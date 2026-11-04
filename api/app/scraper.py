@@ -1,7 +1,9 @@
 """The escalation engine.
 
 Two orthogonal axes:
-  * ENGINE  (http -> dynamic -> stealth)  defeats JS rendering and anti-bot.
+  * ENGINE  (http -> dynamic -> stealth)  defeats JS rendering and anti-bot. Since Scrapling
+    v0.5 both browser tiers run the same stealth (patchright) browser, see app/browser.py;
+    `dynamic` skips the Cloudflare solver, which costs ~5 s even on pages without a challenge.
   * PROXY   (off/on)                       defeats geo-blocks / IP bans / rate-limits.
 
 `engine=auto` walks the engine ladder and stops at the first rung that returns
@@ -22,8 +24,11 @@ from typing import Optional, Tuple
 import anyio
 from starlette.concurrency import run_in_threadpool
 
-from scrapling.fetchers import Fetcher, DynamicFetcher, StealthyFetcher
+from scrapling.fetchers import Fetcher
 from scrapling.core.shell import Convertor  # NOTE: private-ish reuse; pinned scrapling version, see api/README.md
+from scrapling.engines.toolbelt.ad_domains import AD_DOMAINS
+
+from .browser import get_pool
 
 from .config import Settings, get_settings
 from .models import Attempt, Engine, ProxyMode, ScrapeResponse
@@ -51,41 +56,47 @@ class Outcome(str, Enum):
     GEO = "geo_block"        # geo / IP / rate-limit -> enable proxy
     EMPTY = "empty"          # 2xx but ~empty body -> escalate engine (likely needs JS)
     ERROR = "error"          # fetch raised / 5xx / proxy failure
+    LOCAL_ERROR = "local_error"  # THIS server couldn't run the fetch (browser launch, no processes left...) -- not the site's fault
 
 
-# --- sync fetchers (run in a worker thread; they manage their own event loop) --
+# Exception text that means the failure is on our side, not the site's.
+_LOCAL_ERROR_MARKERS = (
+    "resource temporarily unavailable", "pthread_create", "cannot allocate memory",
+    "executable doesn't exist", "browser has been closed", "target page, context or browser has been closed",
+    "connection closed", "no pages finished to clear place", "browser pool not initialised",
+)
 
-def _browser_opts(s: Settings, lean: bool) -> dict:
-    """Page-loading options shared by the browser tiers."""
+
+def _is_local_error(e: Exception) -> bool:
+    if isinstance(e, (BlockingIOError, MemoryError)):
+        return True
+    low = str(e).lower()
+    return any(m in low for m in _LOCAL_ERROR_MARKERS)
+
+
+def _browser_opts(s: Settings, engine: str, lean: bool, pierce_shadow: bool) -> dict:
+    """Per-fetch options for the browser tiers (valid both for one-shot fetches and sessions)."""
+    solve = engine == "stealth" and s.solve_cloudflare
+    # The solver needs a longer timeout; Scrapling only raises it for session-level settings.
+    opts = dict(google_search=False, solve_cloudflare=solve, timeout=60_000 if solve else 30_000)
     if lean:
         # Skip images/media/fonts/stylesheets and ad hosts, and don't wait for network idle:
         # pages with streaming players never go idle and keep pulling video over the proxy.
-        # A fixed pause instead gives JS-built content time to render.
-        return dict(disable_resources=True, block_ads=True, network_idle=False, wait=s.lean_wait_ms)
-    return dict(network_idle=s.browser_network_idle)
+        # A fixed pause instead gives JS-built content time to render. (Ad hosts go in as
+        # blocked_domains: `block_ads` is session-level only.)
+        opts.update(disable_resources=True, blocked_domains=set(AD_DOMAINS), network_idle=False, wait=s.lean_wait_ms)
+    else:
+        opts.update(network_idle=s.browser_network_idle)
+    if pierce_shadow:
+        opts["pierce_shadow"] = True
+    return opts
 
 
-def _fetch_http(url: str, proxy_url: Optional[str], s: Settings, lean: bool):
+def _fetch_http(url: str, proxy_url: Optional[str], s: Settings):
     return Fetcher.get(
         url, impersonate=s.http_impersonate, stealthy_headers=True,
         follow_redirects="safe", timeout=s.http_timeout, proxy=proxy_url,
     )
-
-
-def _fetch_dynamic(url: str, proxy_url: Optional[str], s: Settings, lean: bool):
-    return DynamicFetcher.fetch(
-        url, headless=True, proxy=proxy_url, retries=s.browser_retries, **_browser_opts(s, lean),
-    )
-
-
-def _fetch_stealth(url: str, proxy_url: Optional[str], s: Settings, lean: bool):
-    return StealthyFetcher.fetch(
-        url, headless=True, solve_cloudflare=s.solve_cloudflare, google_search=False, proxy=proxy_url,
-        retries=s.browser_retries, **_browser_opts(s, lean),
-    )
-
-
-_FETCHERS = {"http": _fetch_http, "dynamic": _fetch_dynamic, "stealth": _fetch_stealth}
 
 
 def _looks(markers: Tuple[str, ...], html: str) -> bool:
@@ -108,9 +119,9 @@ def _visible_text(page) -> str:
         return ""  # empty/None body -> no text
 
 
-def _classify(page, html: str, status: Optional[int], err: Optional[str], s: Settings) -> Outcome:
+def _classify(page, html: str, status: Optional[int], err: Optional[str], s: Settings, local: bool = False) -> Outcome:
     if err is not None or page is None:
-        return Outcome.ERROR
+        return Outcome.LOCAL_ERROR if local else Outcome.ERROR
 
     # Gate success on real VISIBLE TEXT, not raw markup. A 200 that is only a JS
     # shell, or a 200-status anti-bot interstitial, carries plenty of markup but
@@ -160,24 +171,27 @@ def _safe_html(page) -> str:
         return ""
 
 
-async def _run_one(url: str, engine: str, proxy_url: Optional[str], s: Settings, lean: bool):
-    """Run a single (engine, proxy) fetch in a worker thread. Never raises."""
-    fn = _FETCHERS[engine]
+async def _run_one(url: str, engine: str, proxy_url: Optional[str], s: Settings, lean: bool, pierce_shadow: bool):
+    """Run a single (engine, proxy) fetch. Never raises.
+
+    Returns (page, status, html, error, elapsed_ms, local) -- `local` marks an error on our side.
+    """
     t0 = time.monotonic()
     try:
         if engine == "http":
-            page = await run_in_threadpool(fn, url, proxy_url, s, lean)
+            page = await run_in_threadpool(_fetch_http, url, proxy_url, s)
         else:
-            async with _browser_limiter:  # gate heavy browser launches
-                page = await run_in_threadpool(fn, url, proxy_url, s, lean)
+            async with _browser_limiter:  # cap concurrent browser pages
+                page = await get_pool().fetch(url, proxy_url, **_browser_opts(s, engine, lean, pierce_shadow))
     except Exception as e:  # noqa: BLE001 — the fetch itself failed; record and keep escalating
-        return None, None, "", f"{type(e).__name__}: {e}", int((time.monotonic() - t0) * 1000)
+        ms = int((time.monotonic() - t0) * 1000)
+        return None, None, "", f"{type(e).__name__}: {e}", ms, _is_local_error(e)
     # The fetch returned a response, but the body may be empty (a 200 with no
     # content -- common for geo-blocks / anti-bot). That makes html_content and
     # get_all_text raise; treat it as empty content (-> EMPTY -> escalate) rather
     # than a hard error, and keep the real status code.
     status = getattr(page, "status", None)
-    return page, status, _safe_html(page), None, int((time.monotonic() - t0) * 1000)
+    return page, status, _safe_html(page), None, int((time.monotonic() - t0) * 1000), False
 
 
 async def scrape(
@@ -190,6 +204,7 @@ async def scrape(
     css_selector: Optional[str],
     main_content_only: bool,
     lean: bool = False,
+    pierce_shadow: bool = False,
 ) -> ScrapeResponse:
     s = get_settings()
     start = time.monotonic()
@@ -200,6 +215,8 @@ async def scrape(
     proxy_on = proxy_mode == ProxyMode.on
     is_auto = engine_mode == Engine.auto
     sequence = ["http", "dynamic", "stealth"] if is_auto else [engine_mode.value]
+    if pierce_shadow and is_auto:
+        sequence = ["dynamic", "stealth"]  # shadow DOM only exists after JS runs; the http tier can't see it
 
     def proxy_url_for(on: bool) -> Optional[str]:
         return build_proxy_url(country) if on else None
@@ -208,8 +225,9 @@ async def scrape(
     done: set[Tuple[str, bool]] = set()
 
     async def run_rung(engine: str, use_proxy: bool, rung_lean: bool):
-        page, status, html, err, ms = await _run_one(url, engine, proxy_url_for(use_proxy), s, rung_lean)
-        outcome = _classify(page, html, status, err, s)
+        page, status, html, err, ms, local = await _run_one(
+            url, engine, proxy_url_for(use_proxy), s, rung_lean, pierce_shadow)
+        outcome = _classify(page, html, status, err, s, local)
         attempts.append(Attempt(engine=engine, proxy=use_proxy, status=status, lean=rung_lean,
                                 outcome=outcome.value, elapsed_ms=ms, error=err))
         if page is not None:

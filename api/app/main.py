@@ -23,6 +23,7 @@ from .models import Engine, Format, ProxyMode, ScrapeRequest, ScrapeResponse
 from .proxy import proxy_available
 from .scraper import scrape
 from . import watchdog
+from .browser import init_pool
 
 log = logging.getLogger("scrapling_api")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -37,6 +38,9 @@ async def lifespan(app: FastAPI):
         log.warning("APIFY_PROXY_PASSWORD is not set — proxy modes 'on'/'auto' will run without a proxy.")
     log.info("Scrapling Scrape API ready on scrapling %s (engine=%s, proxy=%s, format=%s).",
              SCRAPLING_VERSION, s.default_engine, s.default_proxy, s.default_format)
+    pool = init_pool(s)
+    await pool.start()
+    probe_server = await watchdog.start_probe_server()
     task = None
     if s.watchdog_enabled:
         task = asyncio.create_task(watchdog.run(s))
@@ -45,6 +49,8 @@ async def lifespan(app: FastAPI):
     yield
     if task:
         task.cancel()
+    probe_server.close()
+    await pool.close()
 
 
 app = FastAPI(
@@ -85,6 +91,7 @@ async def root() -> dict:
         "scrapling_version": SCRAPLING_VERSION,
         "docs": "/docs",
         "proxy_configured": proxy_available(),
+        "browser_mode": s.browser_mode,
         "defaults": {"engine": s.default_engine, "proxy": s.default_proxy, "format": s.default_format},
     }
 
@@ -100,6 +107,7 @@ async def _scrape(req: ScrapeRequest) -> ScrapeResponse:
         css_selector=req.css_selector,
         main_content_only=req.main_content_only if req.main_content_only is not None else s.main_content_only,
         lean=req.lean if req.lean is not None else s.default_lean,
+        pierce_shadow=req.pierce_shadow,
     )
 
 
@@ -118,9 +126,10 @@ async def scrape_get(
     css_selector: Optional[str] = None,
     main_content_only: Optional[bool] = None,
     lean: Optional[bool] = None,
+    pierce_shadow: bool = False,
 ) -> ScrapeResponse:
     req = ScrapeRequest(
-        url=url, format=format, engine=engine, proxy=proxy,
-        country=country, css_selector=css_selector, main_content_only=main_content_only, lean=lean,
+        url=url, format=format, engine=engine, proxy=proxy, country=country, css_selector=css_selector,
+        main_content_only=main_content_only, lean=lean, pierce_shadow=pierce_shadow,
     )
     return await _scrape(req)

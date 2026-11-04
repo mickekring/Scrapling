@@ -18,10 +18,10 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # 2) Browsers + system libs for the Dynamic/Stealthy tiers.
-#    playwright --with-deps installs the OS libraries; patchright reuses the same
-#    PLAYWRIGHT_BROWSERS_PATH for StealthyFetcher.
-RUN python -m playwright install --with-deps chromium \
- && python -m patchright install chromium
+#    Since Scrapling v0.5 every browser fetch runs on patchright, so only its Chromium is
+#    installed (--with-deps adds the OS libraries). The playwright package is still pulled
+#    in by scrapling[fetchers], but its browser is not needed.
+RUN python -m patchright install --with-deps chromium
 
 # 3) A real init as PID 1. Chromium's exited helpers (chrome, chrome_crashpad) are
 #    reparented to PID 1 when their browser closes; uvicorn never wait()s for them,

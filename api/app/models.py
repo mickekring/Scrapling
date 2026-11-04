@@ -15,8 +15,8 @@ class Format(str, Enum):
 class Engine(str, Enum):
     auto = "auto"        # escalate http -> dynamic -> stealth, stop at first real success
     http = "http"        # Fetcher (curl_cffi), no browser
-    dynamic = "dynamic"  # DynamicFetcher (Playwright Chromium)
-    stealth = "stealth"  # StealthyFetcher (patchright + Cloudflare solver)
+    dynamic = "dynamic"  # stealth browser (patchright) without the Cloudflare solver
+    stealth = "stealth"  # stealth browser + Cloudflare solver
 
 
 class ProxyMode(str, Enum):
@@ -36,6 +36,8 @@ class ScrapeRequest(BaseModel):
     lean: Optional[bool] = Field(None, description="Browser tiers skip images, media, fonts, stylesheets and ad hosts, and don't wait for "
                                                    "network idle, to cut proxy bandwidth. A lean rung that comes back empty or blocked is "
                                                    "retried once in full. No effect on the http tier. Defaults to DEFAULT_LEAN.")
+    pierce_shadow: bool = Field(False, description="Include open Shadow DOM content (web components) in the page. Browser tiers only: "
+                                                   "with engine=auto the http tier is skipped.")
 
 
 class Attempt(BaseModel):
@@ -45,7 +47,8 @@ class Attempt(BaseModel):
     proxy: bool
     status: Optional[int] = None
     lean: bool = False
-    outcome: str
+    outcome: str = Field(description="ok | challenge | geo_block | empty | error | local_error "
+                                     "(local_error = this server failed to run the fetch, not the site)")
     elapsed_ms: int
     error: Optional[str] = None
 

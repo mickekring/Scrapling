@@ -35,7 +35,9 @@ class Settings(BaseSettings):
     solve_cloudflare: bool = True
     browser_retries: int = 2             # per browser-fetch internal retries (Scrapling default 3). Each retry is a full ~60-130s cycle on hard sites, so 3 can blow past client timeouts; 2 keeps a single call bounded. Let n8n retry the rest.
     min_content_chars: int = 200         # a 2xx page with less VISIBLE TEXT than this is "empty" (JS shell / 200-status anti-bot interstitial) -> escalate
-    max_concurrent_browsers: int = 2     # cap simultaneous browser launches (memory guard)
+    max_concurrent_browsers: int = 2     # cap simultaneous browser pages (memory guard)
+    browser_mode: str = "persistent"     # persistent: one long-lived browser, tabs reused | per_request: launch a browser per fetch
+    browser_recycle_after: int = 200     # persistent mode: replace the browser after this many pages (bounds memory + shared cookies)
     request_max_seconds: int = 240       # overall per-request escalation budget (covers slow stealth sites)
     lean_wait_ms: int = 2000             # lean browser rungs skip network idle; this fixed pause lets JS-built content render instead
 
