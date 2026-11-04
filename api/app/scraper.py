@@ -55,25 +55,33 @@ class Outcome(str, Enum):
 
 # --- sync fetchers (run in a worker thread; they manage their own event loop) --
 
-def _fetch_http(url: str, proxy_url: Optional[str], s: Settings):
+def _browser_opts(s: Settings, lean: bool) -> dict:
+    """Page-loading options shared by the browser tiers."""
+    if lean:
+        # Skip images/media/fonts/stylesheets and ad hosts, and don't wait for network idle:
+        # pages with streaming players never go idle and keep pulling video over the proxy.
+        # A fixed pause instead gives JS-built content time to render.
+        return dict(disable_resources=True, block_ads=True, network_idle=False, wait=s.lean_wait_ms)
+    return dict(network_idle=s.browser_network_idle)
+
+
+def _fetch_http(url: str, proxy_url: Optional[str], s: Settings, lean: bool):
     return Fetcher.get(
         url, impersonate=s.http_impersonate, stealthy_headers=True,
         follow_redirects="safe", timeout=s.http_timeout, proxy=proxy_url,
     )
 
 
-def _fetch_dynamic(url: str, proxy_url: Optional[str], s: Settings):
+def _fetch_dynamic(url: str, proxy_url: Optional[str], s: Settings, lean: bool):
     return DynamicFetcher.fetch(
-        url, headless=True, network_idle=s.browser_network_idle, proxy=proxy_url,
-        retries=s.browser_retries,
+        url, headless=True, proxy=proxy_url, retries=s.browser_retries, **_browser_opts(s, lean),
     )
 
 
-def _fetch_stealth(url: str, proxy_url: Optional[str], s: Settings):
+def _fetch_stealth(url: str, proxy_url: Optional[str], s: Settings, lean: bool):
     return StealthyFetcher.fetch(
-        url, headless=True, network_idle=s.browser_network_idle,
-        solve_cloudflare=s.solve_cloudflare, google_search=False, proxy=proxy_url,
-        retries=s.browser_retries,
+        url, headless=True, solve_cloudflare=s.solve_cloudflare, google_search=False, proxy=proxy_url,
+        retries=s.browser_retries, **_browser_opts(s, lean),
     )
 
 
@@ -152,16 +160,16 @@ def _safe_html(page) -> str:
         return ""
 
 
-async def _run_one(url: str, engine: str, proxy_url: Optional[str], s: Settings):
+async def _run_one(url: str, engine: str, proxy_url: Optional[str], s: Settings, lean: bool):
     """Run a single (engine, proxy) fetch in a worker thread. Never raises."""
     fn = _FETCHERS[engine]
     t0 = time.monotonic()
     try:
         if engine == "http":
-            page = await run_in_threadpool(fn, url, proxy_url, s)
+            page = await run_in_threadpool(fn, url, proxy_url, s, lean)
         else:
             async with _browser_limiter:  # gate heavy browser launches
-                page = await run_in_threadpool(fn, url, proxy_url, s)
+                page = await run_in_threadpool(fn, url, proxy_url, s, lean)
     except Exception as e:  # noqa: BLE001 — the fetch itself failed; record and keep escalating
         return None, None, "", f"{type(e).__name__}: {e}", int((time.monotonic() - t0) * 1000)
     # The fetch returned a response, but the body may be empty (a 200 with no
@@ -181,6 +189,7 @@ async def scrape(
     country: Optional[str],
     css_selector: Optional[str],
     main_content_only: bool,
+    lean: bool = False,
 ) -> ScrapeResponse:
     s = get_settings()
     start = time.monotonic()
@@ -198,12 +207,25 @@ async def scrape(
     last = {"page": None, "status": None, "engine": None, "proxy": False}
     done: set[Tuple[str, bool]] = set()
 
-    async def attempt(engine: str, use_proxy: bool):
-        page, status, html, err, ms = await _run_one(url, engine, proxy_url_for(use_proxy), s)
+    async def run_rung(engine: str, use_proxy: bool, rung_lean: bool):
+        page, status, html, err, ms = await _run_one(url, engine, proxy_url_for(use_proxy), s, rung_lean)
         outcome = _classify(page, html, status, err, s)
-        attempts.append(Attempt(engine=engine, proxy=use_proxy, status=status, outcome=outcome.value, elapsed_ms=ms, error=err))
+        attempts.append(Attempt(engine=engine, proxy=use_proxy, status=status, lean=rung_lean,
+                                outcome=outcome.value, elapsed_ms=ms, error=err))
         if page is not None:
             last.update(page=page, status=status, engine=engine, proxy=use_proxy)
+        return outcome
+
+    async def attempt(engine: str, use_proxy: bool):
+        rung_lean = lean and engine != "http"
+        outcome = await run_rung(engine, use_proxy, rung_lean)
+        # Lean can miss JS-built content or trip a site's bot check (seen: tass.ru serves an
+        # error page). Re-run the same rung in full before escalating -- except a dynamic
+        # CHALLENGE in auto mode, which escalates to stealth anyway (itself lean, then full).
+        escalates_anyway = outcome == Outcome.CHALLENGE and is_auto and engine != "stealth"
+        if (rung_lean and outcome in (Outcome.EMPTY, Outcome.CHALLENGE) and not escalates_anyway
+                and time.monotonic() <= deadline):
+            outcome = await run_rung(engine, use_proxy, False)
         return outcome
 
     def finish(ok: bool):

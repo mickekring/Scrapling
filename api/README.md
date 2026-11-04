@@ -58,9 +58,30 @@ for local dev, **set it before exposing publicly**.)
   "proxy": "auto",             // off | on | auto
   "country": "US",             // optional, Apify geo-targeting
   "css_selector": null,        // optional, extract only matching elements
-  "main_content_only": true    // strip to <body>, drop script/style/hidden noise
+  "main_content_only": true,   // strip to <body>, drop script/style/hidden noise
+  "lean": false                // browser tiers skip heavy resources to save proxy bandwidth (see below)
 }
 ```
+
+**`lean`** (default `false`, server default `DEFAULT_LEAN`). The browser tiers then block images,
+media, fonts, stylesheets and ad hosts, and don't wait for network idle (pages with streaming players
+never go idle). Instead they pause `LEAN_WAIT_MS` (2000 ms) for JS-built content. The `<head>` and the
+rendered DOM are kept. If a lean rung comes back empty or blocked, the same rung is retried once in
+full before escalating, so callers need no fallback of their own. One exception: in `engine=auto`, a
+dynamic `challenge` escalates to stealth directly. `attempts[].lean` shows which mode produced each
+result. The http tier is unaffected.
+
+Measured on 2026-11-04, bytes through a counting proxy, `engine=dynamic`:
+
+| Page | Full | Lean | Note |
+|---|---|---|---|
+| gazeta.ru | 5.44 MB, 20 s | 1.44 MB, 3 s | streaming player; same 121 links |
+| edition.cnn.com | 13.4 MB | 7.1 MB | mostly JS, which lean keeps |
+| aftonbladet.se | 2.6 MB | 1.3 MB | |
+| svt.se | 1.3 MB | 0.9 MB | RSS `<link>` kept |
+| tass.ru | 3.6 MB | — | lean gets an error page → automatic full retry |
+
+The Cloudflare demo still solves with lean on (7–18 s, versus ~70 s in full mode).
 
 ### Response
 
@@ -74,8 +95,8 @@ for local dev, **set it before exposing publicly**.)
   "format": "markdown",
   "content": "# Example ...",
   "attempts": [
-    {"engine": "http", "proxy": false, "status": 403, "outcome": "challenge", "elapsed_ms": 412, "error": null},
-    {"engine": "stealth", "proxy": true, "status": 200, "outcome": "ok", "elapsed_ms": 24180, "error": null}
+    {"engine": "http", "proxy": false, "status": 403, "lean": false, "outcome": "challenge", "elapsed_ms": 412, "error": null},
+    {"engine": "stealth", "proxy": true, "status": 200, "lean": false, "outcome": "ok", "elapsed_ms": 24180, "error": null}
   ],
   "elapsed_ms": 24592
 }

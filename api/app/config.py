@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     default_engine: str = "auto"         # auto | http | dynamic | stealth
     default_proxy: str = "off"           # off | on | auto
     main_content_only: bool = True
+    default_lean: bool = False
 
     # --- Fetch tuning -----------------------------------------------------
     http_timeout: int = 30               # seconds, HTTP (Fetcher) tier
@@ -36,6 +37,7 @@ class Settings(BaseSettings):
     min_content_chars: int = 200         # a 2xx page with less VISIBLE TEXT than this is "empty" (JS shell / 200-status anti-bot interstitial) -> escalate
     max_concurrent_browsers: int = 2     # cap simultaneous browser launches (memory guard)
     request_max_seconds: int = 240       # overall per-request escalation budget (covers slow stealth sites)
+    lean_wait_ms: int = 2000             # lean browser rungs skip network idle; this fixed pause lets JS-built content render instead
 
     # --- Browser watchdog (see app/watchdog.py) ---------------------------
     # Periodically launches a headless browser; after N consecutive failures the

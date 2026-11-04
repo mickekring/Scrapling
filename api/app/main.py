@@ -99,6 +99,7 @@ async def _scrape(req: ScrapeRequest) -> ScrapeResponse:
         country=req.country,
         css_selector=req.css_selector,
         main_content_only=req.main_content_only if req.main_content_only is not None else s.main_content_only,
+        lean=req.lean if req.lean is not None else s.default_lean,
     )
 
 
@@ -116,9 +117,10 @@ async def scrape_get(
     country: Optional[str] = None,
     css_selector: Optional[str] = None,
     main_content_only: Optional[bool] = None,
+    lean: Optional[bool] = None,
 ) -> ScrapeResponse:
     req = ScrapeRequest(
         url=url, format=format, engine=engine, proxy=proxy,
-        country=country, css_selector=css_selector, main_content_only=main_content_only,
+        country=country, css_selector=css_selector, main_content_only=main_content_only, lean=lean,
     )
     return await _scrape(req)

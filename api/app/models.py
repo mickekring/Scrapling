@@ -33,6 +33,9 @@ class ScrapeRequest(BaseModel):
     country: Optional[str] = Field(None, description="ISO country code for Apify geo-targeting, e.g. 'US'. Requires proxy support on your plan.")
     css_selector: Optional[str] = Field(None, description="Optional CSS selector to extract only matching elements.")
     main_content_only: Optional[bool] = Field(None, description="Strip to <body> and remove script/style/hidden noise. Defaults to MAIN_CONTENT_ONLY.")
+    lean: Optional[bool] = Field(None, description="Browser tiers skip images, media, fonts, stylesheets and ad hosts, and don't wait for "
+                                                   "network idle, to cut proxy bandwidth. A lean rung that comes back empty or blocked is "
+                                                   "retried once in full. No effect on the http tier. Defaults to DEFAULT_LEAN.")
 
 
 class Attempt(BaseModel):
@@ -41,6 +44,7 @@ class Attempt(BaseModel):
     engine: str
     proxy: bool
     status: Optional[int] = None
+    lean: bool = False
     outcome: str
     elapsed_ms: int
     error: Optional[str] = None
