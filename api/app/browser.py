@@ -123,9 +123,9 @@ class BrowserPool:
     async def fetch(self, url: str, proxy_url: Optional[str], **opts):
         """One browser fetch. ``opts`` are per-fetch Scrapling options (no session-level ones)."""
         use_session, key = self._persistent_key(proxy_url) if self.persistent else (False, None)
-        # Scrapling 0.5 bug: on a reused tab, the first fetch after a Cloudflare solve silently
-        # loses its shadow-DOM snapshot (status and HTML are fine). pierce_shadow is opt-in and
-        # rare, so it always gets a fresh browser.
+        # Scrapling 0.5 bug (still in 0.5.1): on a reused tab, the first fetch after a Cloudflare
+        # solve silently loses its shadow-DOM snapshot (status and HTML are fine). pierce_shadow is
+        # opt-in and rare, so it always gets a fresh browser.
         if opts.get("pierce_shadow"):
             use_session = False
         if not use_session:

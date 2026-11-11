@@ -117,8 +117,8 @@ Re-measured on v0.5 through the proxy session: gazeta.ru 5.4 MB → 1.1 MB, 20 s
 **`pierce_shadow`** (default `false`). Content inside open Shadow DOM (web components) is invisible
 to a normal page capture. With this flag it is included, as `<shadow-root>` elements. Shadow DOM
 only exists after JavaScript runs, so with `engine=auto` the http tier is skipped. These requests
-always get a one-off browser: in Scrapling 0.5, the first fetch on a reused tab after a Cloudflare
-solve loses its shadow content.
+always get a one-off browser: in Scrapling 0.5 (still in 0.5.1), the first fetch on a reused tab
+after a Cloudflare solve loses its shadow content.
 
 ### Response
 
