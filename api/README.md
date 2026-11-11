@@ -208,7 +208,7 @@ printf 'net.ipv6.conf.all.disable_ipv6 = 1\nnet.ipv6.conf.default.disable_ipv6 =
 
 Only do this if the domain's DNS has no AAAA record pointing at the server. Plain `curl` tests can look
 fine, because curl falls back to IPv4. Test the host network the way the build does:
-`docker run --rm --network host python:3.12-slim sh -c "pip install -q playwright && python -m playwright install chromium"`.
+`docker run --rm --network host python:3.13-slim-trixie sh -c "pip install -q playwright && python -m playwright install chromium"`.
 
 > Local testing still uses the compose file: uncomment its `ports:` block and run
 > `docker compose up --build` (it already sets `shm_size: 1gb`).
@@ -266,6 +266,15 @@ The stealth tier can take ~30–90 s (a Cloudflare solve measured 75 s on the Co
   processes accumulate as zombies (~80/min under load) until the container's pids limit is hit
   and the browser tiers stop working while the HTTP tier still answers. If you override the
   entrypoint, keep an init (`--init` / `init: true`).
+- **Security scans** (e.g. Coolify's vulnerability report): the build runs `apt-get upgrade`, because
+  the official Python image can lag Debian's security fixes. Docker reuses that layer from cache, so
+  when a scan reports fixable OS packages, **redeploy without the build cache**. Expected leftovers
+  (Nov 2026, Python 3.13): three CPython CVEs that the scanner marks as fixed only in 3.15 or the
+  unreleased 3.16 (CVE-2025-15367 `poplib`, CVE-2026-116566 `getaddrinfo` null bytes,
+  CVE-2026-103995 `http.client` chunk parsing). Neither the API nor Scrapling calls these: fetching
+  goes through curl_cffi and Chromium. Python 3.15 has no `orjson` wheel yet, so it can't build. Trivy
+  also lists `setuptools 70.3.0`. That entry comes from pip's bundled SBOM (`pip/_vendor/bom.cdx.json`)
+  for the code pip vendors; setuptools itself isn't installed.
 - **Scrapling v0.5 output changes** (compared with 0.4.15): Markdown from several selected
   elements now has blank lines between them, and hidden-content cleaning keeps more visible
   elements (e.g. `opacity:0.95`) and removes more hidden ones. Exact-output comparisons may differ.
