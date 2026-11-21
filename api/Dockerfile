@@ -46,11 +46,12 @@ COPY healthcheck.py ./
 EXPOSE 8000
 
 # Lets Docker (and Coolify's proxy and rolling deploys) see whether the API answers.
-# A script, because the image has no curl or wget. Lenient on purpose: an unhealthy
-# container is taken out of routing, and a busy server may answer slowly.
+# A script, because the image has no curl or wget. Lenient on purpose: a container that
+# fails this is taken out of routing, and a busy server may answer slowly.
 # On Coolify this is used only while the dashboard's own Healthcheck is disabled.
+# Test it with the production environment variables set (see healthcheck.py for why).
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD ["python", "healthcheck.py"]
+    CMD ["python", "/app/healthcheck.py"]
 
 # Single worker on purpose: browser fetches are heavy and are gated by an
 # in-process CapacityLimiter. Scale out with more containers, not more workers.

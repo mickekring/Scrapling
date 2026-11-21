@@ -30,7 +30,7 @@ services:
 
     # The same check the Dockerfile declares (the image has no curl/wget).
     healthcheck:
-      test: ["CMD", "python", "healthcheck.py"]
+      test: ["CMD", "python", "/app/healthcheck.py"]
       interval: 30s
       timeout: 10s
       retries: 3

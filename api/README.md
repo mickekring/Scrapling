@@ -215,14 +215,20 @@ avoids it.
    which calls `/health`). Leave the **Healthcheck** tab's own check **disabled**: an enabled one
    replaces the image's, and its HTTP check needs `curl` or `wget` inside the image, which this
    image doesn't have, so the container would be marked unhealthy and taken out of routing. If you
-   want to configure it there anyway, use type **CMD** with `python healthcheck.py`.
+   want to configure it there anyway, use type **CMD** with `python /app/healthcheck.py`.
+   If the status is ever *Unhealthy*, the reason is in
+   `docker inspect --format '{{json .State.Health}}' <container>`.
 9. *(recommended)* **Resource Limits → Memory**, see [Memory](#memory).
 10. Deploy → cert provisions in ~1 min → `https://<your-domain>/health` → `{"status":"ok"}`.
 
-**Troubleshooting "no available server":** the app itself is fine if `curl localhost:8000/health`
-works from the service's terminal in Coolify — it's purely proxy/port routing. With the Dockerfile
+**Troubleshooting "no available server" / 503:** Coolify's proxy only routes to a container that is
+*healthy*. Check the status first (see step 8). Otherwise the app itself is fine if
+`python /app/healthcheck.py; echo $?` prints `0` in the service's terminal in Coolify, and it's
+purely proxy/port routing. With the Dockerfile
 build pack make sure **Ports Exposes = 8000**. (The Compose build pack instead needs the port on the
-domain, `https://host:8000`, but can still hit the label bug above.)
+domain, `https://host:8000`, but can still hit the label bug above. Until Nov 2026 the compose
+file's own health check also failed whenever `DEFAULT_PROXY` was set, which it always is there:
+see the note on `_PROXY` variables under [Notes & limits](#notes--limits).)
 
 **Troubleshooting: build fails at "Downloading Chrome for Testing … timed out".** The usual cause is a
 server with broken IPv6: it has an IPv6 address, but IPv6 connections hang. Coolify's build uses the
@@ -293,6 +299,13 @@ The stealth tier can take ~30–90 s (a Cloudflare solve measured 75 s on the Co
   [Memory](#memory). To get told when this happens, point an uptime monitor
   (e.g. Uptime Kuma) at it. For the restart to happen, the container's restart policy must not be
   `no`. Check with `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' <container>`.
+- **Variables ending in `_PROXY`**: Python's `urllib`, and some other tools, treat *every*
+  environment variable whose name ends in `_PROXY` as a proxy setting. This service's own
+  `DEFAULT_PROXY=auto` therefore makes `urllib` send all requests to a proxy host called `auto`.
+  Nothing on the scrape path uses `urllib` (curl_cffi and Chromium don't read that name), but the
+  first version of the health check did, and it took a deployment out of routing. Keep anything
+  that runs inside the container (health checks, debug scripts) off `urllib.request`, or clear its
+  proxies explicitly.
 - **Zombie reaping**: the image runs `tini` as PID 1. Without an init, Chromium's exited helper
   processes accumulate as zombies (~80/min under load) until the container's pids limit is hit
   and the browser tiers stop working while the HTTP tier still answers. If you override the
