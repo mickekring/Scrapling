@@ -46,18 +46,43 @@ died), not that the site blocked it.
 
 ### The browser (`BROWSER_MODE`)
 
-- **`persistent`** (default). The browser tiers share one long-running browser whose tabs are
-  reused, instead of launching Chromium for every attempt. Measured on 8 fetches: 0.76 s instead of
-  2.0 s median, and 10 processes spawned instead of 78.
+- **`persistent`** (default). The browser tiers share one long-running browser instead of
+  launching Chromium for every attempt. Each fetch gets its own tab, closed when the fetch ends.
+  Measured on 8 warm fetches in the container: 0.82 s median instead of 1.6 s.
   - **Proxies:** a browser has a fixed proxy, so there is one for direct requests and one for the
     Apify proxy (started on first use). Requests with a specific `country` get a one-off browser.
   - **Cookies:** requests on the same browser share cookies. A solved Cloudflare clearance is
     reused, which makes repeat visits faster, but different callers visiting the same site share
     its cookies.
   - **Recycling:** the browser is replaced every `BROWSER_RECYCLE_AFTER` (200) pages, which bounds
-    memory and cookie build-up, and immediately if it dies. In-flight requests finish on the old one.
+    memory and cookie build-up, and immediately if it dies. In-flight requests finish on the old
+    one, which is then closed.
 - **`per_request`**: a fresh browser for every attempt (the behaviour before v0.5). The fallback
   if the persistent browser ever misbehaves.
+
+### Memory
+
+How much memory the service needs depends on `MAX_CONCURRENT_BROWSERS`, the number of pages open at
+once. Measured on real news front pages, 12 at a time: about 4.8 GB at peak, and 1.2 GB when idle
+afterwards. Three rules keep it there:
+
+- **A tab lives only as long as its fetch.** A finished page left open keeps running its scripts,
+  ads and video.
+- **A browser fetch is abandoned once it has run for `REQUEST_MAX_SECONDS`.** A page can freeze its
+  tab so that the fetch never returns. Such a fetch now ends as an `error` attempt
+  (`browser fetch abandoned after …`), and its tab and concurrency slot are freed.
+- **A replaced browser always goes away:** when its last fetch ends, or 60 s after the request
+  budget at the latest. Any process that outlives the close is killed.
+
+For a hard ceiling, set a **memory limit on the container** (Coolify: *Resource Limits → Memory*).
+As a starting point allow 2 GB plus 0.75 GB per concurrent page: 4 GB at the default
+`MAX_CONCURRENT_BROWSERS=2`, 12 GB at 12. When the limit is hit, the kernel kills the largest
+browser process. That page is retried or fails on its own, and the service keeps running.
+
+`GET /health/browser` shows what is going on: `memory` (the container's use and limit, in MB),
+`slots` (concurrent pages in use), and under `browser` the counters `retired_pending`,
+`retired_oldest_seconds`, `fetch_timeouts`, `forced_closes` and `killed_processes`. Browsers that
+are not going away show up as a `retired_pending` that stays above 0 while the service is idle.
 
 
 If you already know what a site needs, set `engine`/`proxy`/`country` explicitly to
@@ -144,7 +169,7 @@ after a Cloudflare solve loses its shadow content.
 ```bash
 cd api
 cp .env.example .env        # then edit it
-python -m venv .venv && . .venv/bin/activate
+python -m venv .venv && . .venv/bin/activate   # Python 3.11 or newer
 pip install -r requirements.txt
 python -m playwright install --with-deps chromium && python -m patchright install chromium
 uvicorn app.main:app --reload --port 8000
@@ -259,7 +284,8 @@ The stealth tier can take ~30–90 s (a Cloudflare solve measured 75 s on the Co
   `WATCHDOG_MAX_FAILURES` (3) failures in a row it exits with code 1, and the container's restart policy
   starts a fresh one. Docker and Coolify never restart a container just for being *unhealthy*, which
   is why the app exits on its own. `GET /health/browser` shows the last result, the error, the pids
-  used vs the limit, and the zombie count. To get told when this happens, point an uptime monitor
+  used vs the limit, the zombie count, and the memory and browser counters described under
+  [Memory](#memory). To get told when this happens, point an uptime monitor
   (e.g. Uptime Kuma) at it. For the restart to happen, the container's restart policy must not be
   `no`. Check with `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' <container>`.
 - **Zombie reaping**: the image runs `tini` as PID 1. Without an init, Chromium's exited helper

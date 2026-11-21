@@ -21,7 +21,7 @@ from scrapling import __version__ as SCRAPLING_VERSION
 from .config import get_settings
 from .models import Engine, Format, ProxyMode, ScrapeRequest, ScrapeResponse
 from .proxy import proxy_available
-from .scraper import scrape
+from .scraper import browser_slots, scrape
 from . import watchdog
 from .browser import init_pool
 
@@ -78,6 +78,7 @@ async def health() -> dict:
 async def health_browser() -> JSONResponse:
     """200 while the last browser probe passed (or none has run yet), 503 while failing."""
     report = watchdog.report(get_settings())
+    report["slots"] = browser_slots()
     return JSONResponse(report, status_code=503 if report["status"] == "failing" else 200)
 
 

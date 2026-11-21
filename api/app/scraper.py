@@ -62,6 +62,12 @@ _THIN_PAGE_CHARS = 1500
 _browser_limiter = anyio.CapacityLimiter(max(1, get_settings().max_concurrent_browsers))
 
 
+def browser_slots() -> dict:
+    """How many of the concurrent browser-page slots are in use. For /health/browser."""
+    stats = _browser_limiter.statistics()
+    return {"busy": stats.borrowed_tokens, "total": int(stats.total_tokens), "waiting": stats.tasks_waiting}
+
+
 class Outcome(str, Enum):
     OK = "ok"                # real content
     CHALLENGE = "challenge"  # anti-bot / JS wall -> escalate engine toward stealth
@@ -76,6 +82,7 @@ _LOCAL_ERROR_MARKERS = (
     "resource temporarily unavailable", "pthread_create", "cannot allocate memory",
     "executable doesn't exist", "browser has been closed", "target page, context or browser has been closed",
     "connection closed", "no pages finished to clear place", "browser pool not initialised",
+    "browser did not start", "browser stopped answering",
 )
 
 
@@ -199,7 +206,10 @@ async def _run_one(url: str, engine: str, proxy_url: Optional[str], s: Settings,
             page = await run_in_threadpool(_fetch_http, url, proxy_url, s)
         else:
             async with _browser_limiter:  # cap concurrent browser pages
-                page = await get_pool().fetch(url, proxy_url, **_browser_opts(s, engine, lean, pierce_shadow))
+                # A fetch that is still running when the request budget is used up is abandoned:
+                # a page can hang a browser tab forever (see app/browser.py).
+                page = await get_pool().fetch(url, proxy_url, max_seconds=s.request_max_seconds,
+                                              **_browser_opts(s, engine, lean, pierce_shadow))
     except Exception as e:  # noqa: BLE001 — the fetch itself failed; record and keep escalating
         ms = int((time.monotonic() - t0) * 1000)
         return None, None, "", f"{type(e).__name__}: {e}", ms, _is_local_error(e)

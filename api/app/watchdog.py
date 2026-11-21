@@ -65,8 +65,10 @@ async def _probe_browser(timeout_ms: int) -> None:
     """Fetch the probe page through the scrape tiers' browser path. Raises on any failure."""
     if _probe_port is None:
         raise RuntimeError("probe server not started")
-    page = await get_pool().fetch(f"http://127.0.0.1:{_probe_port}/", None, network_idle=False,
-                                  google_search=False, timeout=timeout_ms)
+    # The pool's own deadline goes first, so that it can clean up; probe_once's is the backstop.
+    page = await get_pool().fetch(f"http://127.0.0.1:{_probe_port}/", None,
+                                  max_seconds=max(1.0, timeout_ms / 1000 - 5),
+                                  network_idle=False, google_search=False, timeout=timeout_ms)
     if _PROBE_MARKER not in page.get_all_text(strip=True):
         raise RuntimeError("probe page rendered unexpected content")
 
@@ -113,6 +115,22 @@ def _read_cgroup(name: str) -> Optional[str]:
         return None
 
 
+def _memory() -> dict:
+    """The container's memory use, in MB, from its cgroup. `used` includes the file cache,
+    which the kernel gives back under pressure; `anon` is what the processes really hold."""
+    def mb(value: Optional[str]) -> Optional[int]:
+        return round(int(value) / 1048576) if value and value.isdigit() else None
+
+    stat = dict(line.split(" ", 1) for line in (_read_cgroup("memory.stat") or "").splitlines() if " " in line)
+    return {
+        "used_mb": mb(_read_cgroup("memory.current")),
+        "limit_mb": mb(_read_cgroup("memory.max")),  # None = no limit set on the container
+        "anon_mb": mb(stat.get("anon")),
+        "file_cache_mb": mb(stat.get("file")),
+        "shm_mb": mb(stat.get("shmem")),
+    }
+
+
 def _zombie_count() -> Optional[int]:
     if not os.path.isdir("/proc/self"):
         return None
@@ -152,6 +170,7 @@ def report(s: Settings) -> dict:
         "restart_after_failures": s.watchdog_max_failures,
         "last_error": state.last_error,
         "browser": get_pool().stats(),
+        "memory": _memory(),
         "pids": {
             "current": int(pids_current) if pids_current and pids_current.isdigit() else None,
             "max": int(pids_max) if pids_max and pids_max.isdigit() else pids_max,
