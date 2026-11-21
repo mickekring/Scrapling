@@ -2,7 +2,7 @@
 #
 # Scrapling itself is NOT installed here — this file only BUILDS and RUNS the image.
 # The install happens in ./Dockerfile (pip install -r requirements.txt, which pins
-# scrapling[fetchers]==0.4.8, then playwright/patchright install chromium).
+# scrapling, then patchright installs Chromium).
 services:
   scrapling-api:
     build: .
@@ -28,9 +28,10 @@ services:
     # Chromium needs more than Docker's default 64MB /dev/shm or it crashes.
     shm_size: "1gb"
 
+    # The same check the Dockerfile declares (the image has no curl/wget).
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "healthcheck.py"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
       start_period: 40s

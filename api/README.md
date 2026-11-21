@@ -211,8 +211,13 @@ avoids it.
 5. **Domain: `https://<your-domain>`** — no `:8000` (the Ports Exposes field already sets the port).
 6. **Custom Docker Options: `--shm-size=1g`** — Chromium needs more than Docker's 64MB default `/dev/shm`.
 7. **Environment Variables**: `API_KEY` (generate one), `APIFY_PROXY_PASSWORD`, optional `DEFAULT_PROXY=auto`.
-8. *(optional)* Health check: path `/health`, port `8000`.
-9. Deploy → cert provisions in ~1 min → `https://<your-domain>/health` → `{"status":"ok"}`.
+8. **Health check: nothing to set up.** The image declares its own (`HEALTHCHECK` in the Dockerfile,
+   which calls `/health`). Leave the **Healthcheck** tab's own check **disabled**: an enabled one
+   replaces the image's, and its HTTP check needs `curl` or `wget` inside the image, which this
+   image doesn't have, so the container would be marked unhealthy and taken out of routing. If you
+   want to configure it there anyway, use type **CMD** with `python healthcheck.py`.
+9. *(recommended)* **Resource Limits → Memory**, see [Memory](#memory).
+10. Deploy → cert provisions in ~1 min → `https://<your-domain>/health` → `{"status":"ok"}`.
 
 **Troubleshooting "no available server":** the app itself is fine if `curl localhost:8000/health`
 works from the service's terminal in Coolify — it's purely proxy/port routing. With the Dockerfile
