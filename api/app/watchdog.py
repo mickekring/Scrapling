@@ -61,6 +61,12 @@ async def start_probe_server() -> asyncio.base_events.Server:
     return server
 
 
+def probe_port() -> int:
+    if _probe_port is None:
+        raise RuntimeError("probe server not started")
+    return _probe_port
+
+
 async def _probe_browser(timeout_ms: int) -> None:
     """Fetch the probe page through the scrape tiers' browser path. Raises on any failure."""
     if _probe_port is None:
@@ -68,6 +74,7 @@ async def _probe_browser(timeout_ms: int) -> None:
     # The pool's own deadline goes first, so that it can clean up; probe_once's is the backstop.
     page = await get_pool().fetch(f"http://127.0.0.1:{_probe_port}/", None,
                                   max_seconds=max(1.0, timeout_ms / 1000 - 5),
+                                  guarded=False,  # the probe page is on this container's own loopback
                                   network_idle=False, google_search=False, timeout=timeout_ms)
     if _PROBE_MARKER not in page.get_all_text(strip=True):
         raise RuntimeError("probe page rendered unexpected content")

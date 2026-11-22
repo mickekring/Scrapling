@@ -20,15 +20,18 @@ so output matches the library's `scrapling extract` CLI.
 import time
 from enum import Enum
 from typing import Optional, Tuple
+from urllib.parse import urljoin, urlsplit
 
 import anyio
 from starlette.concurrency import run_in_threadpool
 
-from scrapling.fetchers import Fetcher
+from scrapling.fetchers import FetcherSession
 from scrapling.core.shell import Convertor  # NOTE: private-ish reuse; pinned scrapling version, see api/README.md
 from scrapling.engines.toolbelt.ad_domains import AD_DOMAINS
 
+from . import netguard
 from .browser import get_pool
+from .egress import REFUSED_HEADER, get_egress
 
 from .config import Settings, get_settings
 from .models import Attempt, Engine, ProxyMode, ScrapeResponse
@@ -75,6 +78,7 @@ class Outcome(str, Enum):
     EMPTY = "empty"          # 2xx but ~empty body -> escalate engine (likely needs JS)
     ERROR = "error"          # fetch raised / 5xx / proxy failure
     LOCAL_ERROR = "local_error"  # THIS server couldn't run the fetch (browser launch, no processes left...) -- not the site's fault
+    UNSAFE = "unsafe_destination"  # the page pointed or redirected to a non-public address (netguard.py): nothing is returned, no further rung is tried
 
 
 # Exception text that means the failure is on our side, not the site's.
@@ -82,7 +86,7 @@ _LOCAL_ERROR_MARKERS = (
     "resource temporarily unavailable", "pthread_create", "cannot allocate memory",
     "executable doesn't exist", "browser has been closed", "target page, context or browser has been closed",
     "connection closed", "no pages finished to clear place", "browser pool not initialised",
-    "browser did not start", "browser stopped answering",
+    "browser did not start", "browser stopped answering", "address guard failed",
 )
 
 
@@ -111,11 +115,37 @@ def _browser_opts(s: Settings, engine: str, lean: bool, pierce_shadow: bool) -> 
     return opts
 
 
+_MAX_REDIRECTS = 20
+_REDIRECT_CODES = (301, 302, 303, 307, 308)
+
+
 def _fetch_http(url: str, proxy_url: Optional[str], s: Settings):
-    return Fetcher.get(
-        url, impersonate=s.http_impersonate, stealthy_headers=True,
-        follow_redirects="safe", timeout=s.http_timeout, proxy=proxy_url,
-    )
+    """Fetch with curl, following redirects here so that every hop is checked first.
+
+    Without the Apify proxy, curl goes out through the egress filter (app/egress.py), which only
+    connects to public addresses; the checks here turn a redirect to an internal address into a
+    clean refusal. curl's own "safe" redirect mode is not used: it followed redirects to
+    ::ffff:127.0.0.1 and 0.0.0.0. One session for all hops, so cookies set along the way are
+    sent on, as they were when curl followed.
+    """
+    with FetcherSession(impersonate=s.http_impersonate, stealthy_headers=True, follow_redirects=False,
+                        timeout=s.http_timeout, proxy=proxy_url or get_egress().url) as session:
+        for _ in range(_MAX_REDIRECTS + 1):
+            netguard.check_url(url)
+            try:
+                page = session.get(url)
+            except Exception as e:
+                if proxy_url is None and "response 403" in str(e).lower():
+                    # Our filter refused the tunnel: the name resolved differently for it.
+                    raise netguard.UnsafeDestination(f"{urlsplit(url).hostname} resolves to an address that is not public") from None
+                raise
+            if proxy_url is None and any(k.lower() == REFUSED_HEADER.lower() for k in page.headers):
+                raise netguard.UnsafeDestination(f"{urlsplit(url).hostname} resolves to an address that is not public")
+            location = next((v for k, v in page.headers.items() if k.lower() == "location"), None)
+            if page.status not in _REDIRECT_CODES or not location:
+                return page
+            url = urljoin(url, location)
+    raise RuntimeError(f"gave up after {_MAX_REDIRECTS} redirects")
 
 
 def _looks(markers: Tuple[str, ...], html: str) -> bool:
@@ -138,9 +168,9 @@ def _visible_text(page) -> str:
         return ""  # empty/None body -> no text
 
 
-def _classify(page, html: str, status: Optional[int], err: Optional[str], s: Settings, local: bool = False) -> Outcome:
+def _classify(page, html: str, status: Optional[int], err: Optional[str], s: Settings, fault: Optional[str] = None) -> Outcome:
     if err is not None or page is None:
-        return Outcome.LOCAL_ERROR if local else Outcome.ERROR
+        return {"unsafe": Outcome.UNSAFE, "local": Outcome.LOCAL_ERROR}.get(fault, Outcome.ERROR)
 
     # Gate success on real VISIBLE TEXT, not raw markup. A 200 that is only a JS
     # shell, or a 200-status anti-bot interstitial, carries plenty of markup but
@@ -198,7 +228,8 @@ def _safe_html(page) -> str:
 async def _run_one(url: str, engine: str, proxy_url: Optional[str], s: Settings, lean: bool, pierce_shadow: bool):
     """Run a single (engine, proxy) fetch. Never raises.
 
-    Returns (page, status, html, error, elapsed_ms, local) -- `local` marks an error on our side.
+    Returns (page, status, html, error, elapsed_ms, fault). `fault` says whose error it is:
+    "local" = ours, "unsafe" = the destination was not a public address, None = the site's.
     """
     t0 = time.monotonic()
     try:
@@ -210,15 +241,17 @@ async def _run_one(url: str, engine: str, proxy_url: Optional[str], s: Settings,
                 # a page can hang a browser tab forever (see app/browser.py).
                 page = await get_pool().fetch(url, proxy_url, max_seconds=s.request_max_seconds,
                                               **_browser_opts(s, engine, lean, pierce_shadow))
+    except netguard.UnsafeDestination as e:
+        return None, None, "", f"unsafe destination: {e}", int((time.monotonic() - t0) * 1000), "unsafe"
     except Exception as e:  # noqa: BLE001 — the fetch itself failed; record and keep escalating
         ms = int((time.monotonic() - t0) * 1000)
-        return None, None, "", f"{type(e).__name__}: {e}", ms, _is_local_error(e)
+        return None, None, "", f"{type(e).__name__}: {e}", ms, "local" if _is_local_error(e) else None
     # The fetch returned a response, but the body may be empty (a 200 with no
     # content -- common for geo-blocks / anti-bot). That makes html_content and
     # get_all_text raise; treat it as empty content (-> EMPTY -> escalate) rather
     # than a hard error, and keep the real status code.
     status = getattr(page, "status", None)
-    return page, status, _safe_html(page), None, int((time.monotonic() - t0) * 1000), False
+    return page, status, _safe_html(page), None, int((time.monotonic() - t0) * 1000), None
 
 
 async def scrape(
@@ -252,9 +285,9 @@ async def scrape(
     done: set[Tuple[str, bool]] = set()
 
     async def run_rung(engine: str, use_proxy: bool, rung_lean: bool):
-        page, status, html, err, ms, local = await _run_one(
+        page, status, html, err, ms, fault = await _run_one(
             url, engine, proxy_url_for(use_proxy), s, rung_lean, pierce_shadow)
-        outcome = _classify(page, html, status, err, s, local)
+        outcome = _classify(page, html, status, err, s, fault)
         attempts.append(Attempt(engine=engine, proxy=use_proxy, status=status, lean=rung_lean,
                                 outcome=outcome.value, elapsed_ms=ms, error=err))
         if page is not None:
@@ -277,10 +310,16 @@ async def scrape(
         page = last["page"]
         content = _extract(page, fmt, css_selector, main_content_only) if page is not None else ""
         return ScrapeResponse(
-            url=url, ok=ok, status=last["status"], engine_used=last["engine"],
+            url=url, final_url=str(page.url) if page is not None else None,
+            ok=ok, status=last["status"], engine_used=last["engine"],
             proxy_used=bool(last["proxy"]), format=fmt, content=content,
             attempts=attempts, elapsed_ms=int((time.monotonic() - start) * 1000),
         )
+
+    def refuse():
+        # Nothing from an earlier rung either: the caller must not mistake it for the page.
+        last.update(page=None, status=None, engine=None, proxy=False)
+        return finish(False)
 
     idx = 0
     while idx < len(sequence):
@@ -296,6 +335,8 @@ async def scrape(
         outcome = await attempt(engine, proxy_on)
         if outcome == Outcome.OK:
             return finish(True)
+        if outcome == Outcome.UNSAFE:
+            return refuse()  # another engine would only follow the same link to the same place
 
         # geo/IP block: turn the proxy on (sticky) and retry the SAME rung once.
         if outcome == Outcome.GEO and proxy_mode == ProxyMode.auto and have_proxy and not proxy_on:
@@ -310,7 +351,10 @@ async def scrape(
     # Nuclear fallback (auto + proxy=auto): stealth THROUGH the proxy — handles geo+anti-bot.
     if (is_auto and proxy_mode == ProxyMode.auto and have_proxy
             and ("stealth", True) not in done and time.monotonic() <= deadline):
-        if await attempt("stealth", True) == Outcome.OK:
+        outcome = await attempt("stealth", True)
+        if outcome == Outcome.OK:
             return finish(True)
+        if outcome == Outcome.UNSAFE:
+            return refuse()
 
     return finish(False)

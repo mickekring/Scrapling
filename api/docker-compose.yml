@@ -21,7 +21,8 @@ services:
       # Set these in the Coolify UI → Environment Variables. Locally, put them in a
       # `.env` file beside this compose (Docker reads it automatically for ${...}).
       # Everything else uses the defaults in app/config.py.
-      API_KEY: ${API_KEY:-}
+      API_KEY: ${API_KEY:-}                  # required: without it the service refuses to start...
+      ALLOW_UNAUTHENTICATED: ${ALLOW_UNAUTHENTICATED:-false}  # ...unless this is true (local development only)
       APIFY_PROXY_PASSWORD: ${APIFY_PROXY_PASSWORD:-}
       DEFAULT_PROXY: ${DEFAULT_PROXY:-off}   # set to "auto" to auto-use the proxy on geo/IP blocks
 

@@ -7,7 +7,9 @@ the Apify password never has to be URL-encoded by the caller and never leaves
 the server in a request body.
 """
 
+import re
 from typing import Optional
+from urllib.parse import quote
 
 from .config import get_settings
 
@@ -29,7 +31,13 @@ def build_proxy_url(country: Optional[str] = None) -> Optional[str]:
 
     username = (s.apify_proxy_username or "auto").strip()
     if country:
+        # Two letters only: anything else could rewrite the proxy URL itself (`X@10.0.0.5:8080/#`
+        # made an internal host the proxy). The request model enforces this too.
+        if not re.fullmatch(r"[A-Za-z]{2}", country.strip()):
+            raise ValueError("country must be a two-letter code")
         token = f"country-{country.strip().upper()}"
         username = token if username == "auto" else f"{username},{token}"
 
-    return f"http://{username}:{s.apify_proxy_password}@{s.apify_proxy_host}:{s.apify_proxy_port}"
+    # Percent-encoded: curl and Scrapling decode the credentials again.
+    return (f"http://{quote(username, safe=',-_')}:{quote(s.apify_proxy_password, safe='')}"
+            f"@{s.apify_proxy_host}:{s.apify_proxy_port}")

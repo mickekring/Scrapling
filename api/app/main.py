@@ -22,8 +22,9 @@ from .config import get_settings
 from .models import Engine, Format, ProxyMode, ScrapeRequest, ScrapeResponse
 from .proxy import proxy_available
 from .scraper import browser_slots, scrape
-from . import watchdog
+from . import netguard, watchdog
 from .browser import init_pool
+from .egress import get_egress, init_egress
 
 log = logging.getLogger("scrapling_api")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -33,14 +34,21 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 async def lifespan(app: FastAPI):
     s = get_settings()
     if not s.api_key:
-        log.warning("API_KEY is not set — the API is OPEN. Set API_KEY before exposing this publicly.")
+        if not s.allow_unauthenticated:
+            # Refuse to run open by accident: anyone who can reach the port could make this
+            # server fetch pages for them. uvicorn exits (code 3) and the deploy fails visibly.
+            raise RuntimeError("API_KEY is not set. Set it, or set ALLOW_UNAUTHENTICATED=true "
+                               "to run an open API on purpose (local development).")
+        log.warning("API_KEY is not set and ALLOW_UNAUTHENTICATED=true — the API is OPEN.")
     if not proxy_available():
         log.warning("APIFY_PROXY_PASSWORD is not set — proxy modes 'on'/'auto' will run without a proxy.")
     log.info("Scrapling Scrape API ready on scrapling %s (engine=%s, proxy=%s, format=%s).",
              SCRAPLING_VERSION, s.default_engine, s.default_proxy, s.default_format)
+    egress = init_egress()  # before any browser or curl: it is their only way out
     pool = init_pool(s)
     await pool.start()
     probe_server = await watchdog.start_probe_server()
+    egress.exempt("127.0.0.1", watchdog.probe_port())  # the watchdog's own page, on this container's loopback
     task = None
     if s.watchdog_enabled:
         task = asyncio.create_task(watchdog.run(s))
@@ -51,6 +59,7 @@ async def lifespan(app: FastAPI):
         task.cancel()
     probe_server.close()
     await pool.close()
+    egress.stop()
 
 
 app = FastAPI(
@@ -79,6 +88,7 @@ async def health_browser() -> JSONResponse:
     """200 while the last browser probe passed (or none has run yet), 503 while failing."""
     report = watchdog.report(get_settings())
     report["slots"] = browser_slots()
+    report["egress"] = get_egress().stats()  # refused = connections to non-public addresses stopped
     return JSONResponse(report, status_code=503 if report["status"] == "failing" else 200)
 
 
@@ -99,6 +109,15 @@ async def root() -> dict:
 
 async def _scrape(req: ScrapeRequest) -> ScrapeResponse:
     s = get_settings()
+    try:
+        await netguard.acheck_url(str(req.url))
+    except netguard.UnsafeDestination as e:
+        # Refused before anything is fetched. Redirects met later are refused in the ladder
+        # and come back as a normal 200 response with outcome "unsafe_destination".
+        raise HTTPException(status_code=400, detail={
+            "error": "unsafe_destination",
+            "message": f"This URL is not fetched: {e}.",
+        })
     return await scrape(
         url=str(req.url),
         fmt=(req.format or Format(s.default_format)).value,

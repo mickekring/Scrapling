@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     # Clients must send this as the `X-API-Key` header. If left blank the API
     # is OPEN (handy for local dev) and a loud warning is logged at startup.
     api_key: str = ""
+    # With no API_KEY the service refuses to start, unless this says an open API is intended
+    # (local development). An open scraper inside a hosting network is a way in.
+    allow_unauthenticated: bool = False
+
+    # --- Destinations -----------------------------------------------------
+    # Only public internet addresses are fetched (see app/netguard.py). List internal IPs or
+    # CIDRs here, comma-separated, if a specific internal site really must be scraped.
+    allow_private_networks: str = ""
 
     # --- Apify proxy (datacenter / "ordinary", username = auto) ----------
     # Leave the password blank to disable proxying entirely.

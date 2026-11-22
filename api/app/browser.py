@@ -20,6 +20,9 @@ Three rules keep memory bounded. Each one closes a leak found in production (Nov
    and, after the next recycle, its whole browser were never released.
 3. A replaced browser always goes away: when its last fetch ends or after a grace period,
    whichever comes first, and any process that outlives the close is killed.
+
+Browsers that don't use the Apify proxy go out through the egress filter (app/egress.py), which
+only connects to public addresses.
 """
 
 import asyncio
@@ -28,9 +31,12 @@ import time
 from contextlib import suppress
 from typing import Optional
 
+from urllib.parse import urlsplit
+
 from scrapling.fetchers import AsyncStealthySession
 
-from . import proctree
+from . import netguard, proctree
+from .egress import get_egress
 from .config import Settings
 from .proxy import build_proxy_url, proxy_available
 
@@ -62,12 +68,97 @@ def _driver_pid(session: AsyncStealthySession) -> Optional[int]:
         return None
 
 
+class _TabGuard:
+    """Turns a page that heads for an internal address into a clean refusal.
+
+    The enforcing happens in the egress filter (app/egress.py): no request of the browser can
+    reach a non-public address. This guard only makes the outcome clear: when the page itself
+    navigates there (redirect hop, meta refresh, script), the fetch is refused with
+    ``UnsafeDestination`` instead of failing with a network error.
+    """
+
+    def __init__(self, spawn):
+        self.refused: Optional[str] = None  # why this fetch must not return anything
+        self.broken: Optional[str] = None   # the guard itself failed: return nothing either
+        self._spawn = spawn
+        self._tabs: list = []
+        self._checks: set[asyncio.Future] = set()
+        self.navigated_to: set[str] = set()  # hosts the page itself navigated to
+
+    async def attach(self, tab) -> None:
+        """Guard a tab before it navigates. If that fails the tab is closed: Scrapling swallows
+        errors from its setup hook and would go on to load the page unguarded."""
+        self._tabs.append(tab)
+        if self.refused is not None:  # Scrapling retrying a refused fetch: don't let it knock again
+            await _close_quietly(tab)  # safe here: nothing is running on this tab yet
+            return
+        try:
+            tab.on("request", self._on_request)  # a listener, not a route: routes turn off the HTTP cache
+        except Exception as e:  # noqa: BLE001
+            self.broken = f"{type(e).__name__}: {e}"
+            await _close_quietly(tab)
+
+    def refuse(self, reason: str) -> None:
+        if self.refused is None:
+            self.refused = reason
+            # Stop the page from sending anything more. Not by closing the tab: closing it while
+            # Scrapling is still following a redirect on it deadlocked both, about one time in
+            # four. Blocking every request lets Scrapling finish or fail normally, and the tab is
+            # closed afterwards like any other (_drop_tabs).
+            for tab in self._tabs:
+                self._spawn(_block_everything(tab))
+
+    async def settle(self) -> None:
+        """Wait for checks still running; one that doesn't finish counts as a refusal."""
+        if self._checks:
+            _, pending = await asyncio.wait(set(self._checks), timeout=_UNWIND_SECONDS)
+            if pending:
+                self.refuse("the address check did not finish")
+
+    def _on_request(self, request) -> None:
+        if self.refused is None and _is_page_navigation(request):
+            self.navigated_to.add((urlsplit(request.url).hostname or "").lower())
+            task = self._spawn(self._check_navigation(request))
+            self._checks.add(task)
+            task.add_done_callback(self._checks.discard)
+
+    async def _check_navigation(self, request) -> None:
+        try:
+            await netguard.acheck_host(urlsplit(request.url).hostname or "")
+        except netguard.UnsafeDestination as e:
+            self.refuse(f"redirected to an address that is not public: {e}"
+                        if request.redirected_from is not None else str(e))
+        except Exception as e:  # noqa: BLE001 — fail closed
+            self.refuse(f"the address check failed ({type(e).__name__})")
+
+
+def _is_page_navigation(request) -> bool:
+    try:
+        return request.is_navigation_request() and request.frame.parent_frame is None
+    except Exception:  # noqa: BLE001 — a request without a frame (service worker) is not the page
+        return False
+
+
+async def _close_quietly(tab) -> None:
+    with suppress(Exception):
+        await tab.close()
+
+
+async def _block_everything(tab) -> None:
+    async def abort(route) -> None:
+        with suppress(Exception):
+            await route.abort("blockedbyclient")
+
+    with suppress(Exception):
+        await tab.route("**/*", abort)
+
+
 class _Slot:
     """One browser session and its bookkeeping."""
 
-    def __init__(self, session: AsyncStealthySession, proxied: bool, one_off: bool):
+    def __init__(self, session: AsyncStealthySession, one_off: bool, direct: bool):
         self.session = session
-        self.proxied = proxied
+        self.direct = direct  # out through the egress filter, not the Apify proxy
         self.one_off = one_off
         self.served = 0
         self.inflight = 0
@@ -134,14 +225,15 @@ class BrowserPool:
         # reserved for the watchdog probe: under full load a probe that had to wait for a tab
         # would fail and could restart a perfectly healthy server.
         max_pages = 1 if one_off else max(1, self.s.max_concurrent_browsers) + 1
-        session = AsyncStealthySession(headless=True, max_pages=max_pages,
-                                       retries=self.s.browser_retries, proxy=proxy_url)
+        # Without the Apify proxy, the browser goes out through the egress filter (app/egress.py).
+        session = AsyncStealthySession(headless=True, max_pages=max_pages, retries=self.s.browser_retries,
+                                       proxy=proxy_url or get_egress().url)
         try:
             await self._bounded(session.start(), _SESSION_START_SECONDS)
         except _Abandoned:
             proctree.kill(proctree.tree(proctree.identify(_driver_pid(session))))
             raise RuntimeError(f"browser did not start within {_SESSION_START_SECONDS}s") from None
-        slot = _Slot(session, bool(proxy_url), one_off)
+        slot = _Slot(session, one_off, direct=proxy_url is None)
         session.context.on("close", lambda *_: setattr(slot, "dead", True))
         if not one_off:
             log.info("Browser session started (%s, max_pages=%d).",
@@ -244,14 +336,33 @@ class BrowserPool:
                 log.warning("A tab did not close (%s: %s); replacing its browser.", type(e).__name__, e)
             slot.dead = True
 
-    async def _fetch_in_fresh_tab(self, slot: _Slot, url: str, opts: dict):
+    def _drop_tabs(self, slot: _Slot, tabs: list) -> None:
+        """Take a finished fetch's tabs out of Scrapling's pool and close them. No awaits:
+        Scrapling has just put the tab back in its pool, marked ready for the next request, with
+        the page still loaded and running (after a cancelled fetch that even includes a frozen
+        tab), and nothing else may run before it is out of the pool again."""
+        pool = slot.session.page_pool
+        for info in [i for i in pool.pages if any(i.page is tab for tab in tabs)]:
+            pool.remove_page(info)
+        for tab in tabs:
+            if not tab.is_closed():
+                self._spawn(self._close_tab(slot, tab))
+        # Every other fetch running on this browser holds at most one pool entry.
+        if len(pool.pages) >= slot.inflight:
+            slot.dead = True  # more than that: a tab nobody will release is stuck in the pool
+
+    async def _fetch_in_fresh_tab(self, slot: _Slot, url: str, opts: dict, guarded: bool):
         tabs: list = []  # one per attempt Scrapling makes
+        guard = _TabGuard(self._spawn) if guarded else None
 
         async def remember(page) -> None:  # Scrapling calls this with the tab before navigating
             tabs.append(page)
+            if guard is not None:
+                await guard.attach(page)
 
+        page = error = None
         try:
-            return await slot.session.fetch(url, page_setup=remember, **opts)
+            page = await slot.session.fetch(url, page_setup=remember, **opts)
         except asyncio.CancelledError:
             # Cut off mid-fetch. If Scrapling had not yet handed over the tab of the attempt it was
             # on, that tab is one we can't find: it may be open, or sit in the pool as busy for
@@ -259,24 +370,36 @@ class BrowserPool:
             if all(tab.is_closed() for tab in tabs):
                 slot.dead = True
             raise
+        except Exception as e:  # noqa: BLE001 — re-raised below, unless the guard explains it
+            error = e
         finally:
-            # Scrapling has just put the tab back in its pool, marked ready for the next request,
-            # with this page still loaded and running; after a cancelled fetch that even includes
-            # a frozen tab. Take it out of the pool before anything else can run, then close it.
-            pool = slot.session.page_pool
-            for info in [i for i in pool.pages if any(i.page is tab for tab in tabs)]:
-                pool.remove_page(info)
-            for tab in tabs:
-                if not tab.is_closed():
-                    self._spawn(self._close_tab(slot, tab))
-            # Every other fetch running on this browser holds at most one pool entry.
-            if len(pool.pages) >= slot.inflight:
-                slot.dead = True  # more than that: a tab nobody will release is stuck in the pool
+            self._drop_tabs(slot, tabs)
 
-    async def fetch(self, url: str, proxy_url: Optional[str], *, max_seconds: float, **opts):
+        if guard is not None:
+            await guard.settle()  # also after a failed fetch: the verdict decides which error it is
+            if guard.broken is not None:
+                raise RuntimeError(f"address guard failed, nothing was fetched ({guard.broken})")
+            if guard.refused is not None:
+                raise netguard.UnsafeDestination(guard.refused)
+        if error is not None:
+            # The egress filter refused a navigation that looked fine to the check above (the name
+            # resolved differently for it): a refusal, not a network error.
+            if guard is not None and slot.direct:
+                host = next((h for h in guard.navigated_to if get_egress().refused_recently(h)), None)
+                if host:
+                    raise netguard.UnsafeDestination(f"{host} resolves to an address that is not public") from None
+            raise error
+        if guard is not None and str(page.url).startswith(("http://", "https://")):
+            await netguard.acheck_url(str(page.url))  # where the page ended up, as a last lock
+        return page
+
+    async def fetch(self, url: str, proxy_url: Optional[str], *, max_seconds: float, guarded: bool = True, **opts):
         """One browser fetch, abandoned after ``max_seconds``.
 
-        ``opts`` are per-fetch Scrapling options (no session-level ones).
+        ``opts`` are per-fetch Scrapling options (no session-level ones). ``guarded`` raises
+        ``netguard.UnsafeDestination`` when the page navigates to a non-public address (the egress
+        filter stops the connection either way); only the watchdog's probe of its own loopback
+        page turns it off.
         """
         use_session, key = self._persistent_key(proxy_url) if self.persistent else (False, None)
         # Scrapling 0.5 bug (still in 0.5.1): on a reused tab, the first fetch after a Cloudflare
@@ -287,7 +410,7 @@ class BrowserPool:
             use_session = False
         slot = await self._acquire(key if use_session else proxy_url, one_off=not use_session)
         try:
-            return await self._bounded(self._fetch_in_fresh_tab(slot, url, opts), max_seconds)
+            return await self._bounded(self._fetch_in_fresh_tab(slot, url, opts, guarded), max_seconds)
         except _Abandoned as e:
             self.fetch_timeouts += 1
             if not e.unwound:

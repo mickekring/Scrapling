@@ -40,9 +40,11 @@ separate sticky decision:
   of the run. A final `stealth + proxy` fallback covers the geo **and** anti-bot case.
 
 Every rung tried is returned in `attempts[]` so you can see exactly how a URL was routed.
-Its `outcome` is one of `ok`, `challenge`, `geo_block`, `empty`, `error` or `local_error`.
-`local_error` means **this server** couldn't run the fetch (the browser failed to start or
-died), not that the site blocked it.
+Its `outcome` is one of `ok`, `challenge`, `geo_block`, `empty`, `error`, `local_error` or
+`unsafe_destination`. `local_error` means **this server** couldn't run the fetch (the browser failed
+to start or died), not that the site blocked it. `unsafe_destination` means the page pointed or
+redirected to an address that isn't on the public internet: nothing is returned and no further
+rung is tried. See [What the service will fetch](#what-the-service-will-fetch).
 
 ### The browser (`BROWSER_MODE`)
 
@@ -99,8 +101,8 @@ skip the ladder — fastest and cheapest.
 | `GET`  | `/scrape` | yes | Convenience (query params) |
 | `GET`  | `/docs` | no | Interactive OpenAPI docs |
 
-Auth: send `X-API-Key: <API_KEY>`. (If `API_KEY` is unset the API is open — fine
-for local dev, **set it before exposing publicly**.)
+Auth: send `X-API-Key: <API_KEY>`. `API_KEY` is required: without it the service refuses to start,
+unless `ALLOW_UNAUTHENTICATED=true` says an open API is intended (local development only).
 
 ### Request (POST `/scrape`)
 
@@ -150,6 +152,7 @@ after a Cloudflare solve loses its shadow content.
 ```json
 {
   "url": "https://example.com",
+  "final_url": "https://www.example.com/",
   "ok": true,
   "status": 200,
   "engine_used": "stealth",
@@ -163,6 +166,39 @@ after a Cloudflare solve loses its shadow content.
   "elapsed_ms": 24592
 }
 ```
+
+`url` is the URL you sent; `final_url` is the address of the document `content` comes from, after
+redirects (`null` when nothing was returned).
+
+### What the service will fetch
+
+Only pages on the public internet. The service runs inside a hosting network and is fed URLs that
+come from strangers (feeds, social posts), so a link that points or redirects to an internal
+address (`10.x`, `127.0.0.1`, `169.254.169.254`, `100.64.0.0/10`, a Docker service name...) must
+not be fetched from the inside and handed back as an article.
+
+**How it's enforced.** Every connection the service makes on its own, from the browser and from
+curl, goes through a small filtering proxy inside the container (the *egress filter*). For each
+connection it resolves the host itself, refuses unless every address is public, and connects to
+an address it checked. Nothing a page does gets past it: redirects, iframes, `fetch()`, workers of
+any kind, popups, WebSockets. A DNS server that answers differently the second time (DNS rebinding)
+doesn't help either, because the connection goes to the checked address. Requests through the
+Apify proxy (`proxy=on/auto`, `country`) don't use the filter: the proxy connects from its own
+network, not ours.
+
+**What the caller sees:**
+
+- **A URL that is internal to begin with** (also in odd forms: `2130706433`, `::ffff:127.0.0.1`,
+  `0.0.0.0`): **HTTP 400**, `{"detail": {"error": "unsafe_destination", "message": "This URL is not fetched: …"}}`.
+- **A page that navigates to an internal address** (HTTP redirect, meta refresh, script): **HTTP 200**
+  with `ok: false`, `content: ""`, `final_url: null`, `status: null`, and the last attempt's
+  `outcome: "unsafe_destination"`. No further rung is tried.
+- **A page that only embeds or calls something internal** (an image, iframe, `fetch()`, worker,
+  WebSocket): those requests are blocked and the page itself comes back normally, without them.
+
+To scrape a specific internal site on purpose, list its IPs or networks in `ALLOW_PRIVATE_NETWORKS`
+(comma-separated, CIDR allowed). `/health/browser` shows the filter's counters under `egress`
+(`refused` = connections to non-public addresses stopped).
 
 ## Run locally
 
@@ -192,7 +228,7 @@ curl -s -H "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
 not by compose — compose only builds & runs that image.
 
 ```bash
-cp .env.example .env                       # set API_KEY etc.
+cp .env.example .env                       # set API_KEY (or ALLOW_UNAUTHENTICATED=true for local dev)
 # uncomment the `ports:` block in docker-compose.yml (Coolify uses `expose` instead)
 docker compose up --build                  # -> http://localhost:8000
 ```
@@ -210,7 +246,8 @@ avoids it.
 4. **Ports Exposes: `8000`** — the key field; this is the backend port Coolify routes to.
 5. **Domain: `https://<your-domain>`** — no `:8000` (the Ports Exposes field already sets the port).
 6. **Custom Docker Options: `--shm-size=1g`** — Chromium needs more than Docker's 64MB default `/dev/shm`.
-7. **Environment Variables**: `API_KEY` (generate one), `APIFY_PROXY_PASSWORD`, optional `DEFAULT_PROXY=auto`.
+7. **Environment Variables**: `API_KEY` (generate one; **required**, the service won't start without it),
+   `APIFY_PROXY_PASSWORD`, optional `DEFAULT_PROXY=auto`.
 8. **Health check: nothing to set up.** The image declares its own (`HEALTHCHECK` in the Dockerfile,
    which calls `/health`). Leave the **Healthcheck** tab's own check **disabled**: an enabled one
    replaces the image's, and its HTTP check needs `curl` or `wget` inside the image, which this
@@ -286,9 +323,8 @@ The stealth tier can take ~30–90 s (a Cloudflare solve measured 75 s on the Co
 
 ## Notes & limits
 
-- **SSRF**: the service fetches arbitrary URLs. It accepts only `http`/`https`
-  and the HTTP tier uses `follow_redirects="safe"` (rejects redirects to private
-  IPs). Keep the API behind its API key; consider an allow-list if exposed widely.
+- **SSRF**: only public internet addresses are fetched, also after redirects; see
+  [What the service will fetch](#what-the-service-will-fetch). Keep the API behind its API key.
 - **Self-healing**: `/health` only proves the web server answers. It stayed green through a 30-hour
   outage in which no browser could be launched. So the app also runs a watchdog. Every
   `WATCHDOG_INTERVAL_SECONDS` (300) it launches a headless browser on a local page. After

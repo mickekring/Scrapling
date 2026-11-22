@@ -30,7 +30,8 @@ class ScrapeRequest(BaseModel):
     format: Optional[Format] = Field(None, description="Output format. Defaults to the server's DEFAULT_FORMAT.")
     engine: Optional[Engine] = Field(None, description="Fetch tier or 'auto' to escalate. Defaults to DEFAULT_ENGINE.")
     proxy: Optional[ProxyMode] = Field(None, description="Proxy behaviour. Defaults to DEFAULT_PROXY.")
-    country: Optional[str] = Field(None, description="ISO country code for Apify geo-targeting, e.g. 'US'. Requires proxy support on your plan.")
+    country: Optional[str] = Field(None, pattern=r"^[A-Za-z]{2}$",
+                                   description="ISO country code for Apify geo-targeting, e.g. 'US'. Requires proxy support on your plan.")
     css_selector: Optional[str] = Field(None, description="Optional CSS selector to extract only matching elements.")
     main_content_only: Optional[bool] = Field(None, description="Strip to <body> and remove script/style/hidden noise. Defaults to MAIN_CONTENT_ONLY.")
     lean: Optional[bool] = Field(None, description="Browser tiers skip images, media, fonts, stylesheets and ad hosts, and don't wait for "
@@ -47,14 +48,18 @@ class Attempt(BaseModel):
     proxy: bool
     status: Optional[int] = None
     lean: bool = False
-    outcome: str = Field(description="ok | challenge | geo_block | empty | error | local_error "
-                                     "(local_error = this server failed to run the fetch, not the site)")
+    outcome: str = Field(description="ok | challenge | geo_block | empty | error | local_error | unsafe_destination "
+                                     "(local_error = this server failed to run the fetch, not the site; "
+                                     "unsafe_destination = the page pointed or redirected to an address that is "
+                                     "not on the public internet, so nothing was returned)")
     elapsed_ms: int
     error: Optional[str] = None
 
 
 class ScrapeResponse(BaseModel):
-    url: str
+    url: str = Field(description="The URL that was requested.")
+    final_url: Optional[str] = Field(None, description="The address of the document that `content` comes from, after "
+                                                      "redirects. Null when no page was returned.")
     ok: bool = Field(description="True if a rung returned real content (2xx, no challenge, non-trivial body).")
     status: Optional[int]
     engine_used: Optional[str]
